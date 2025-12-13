@@ -10,3 +10,8 @@ installer:
 
 detect:
   file: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+
+uninstall:
+  type: exe
+  path: "C:\\Program Files\\Google\\Chrome\\Application\\{version}\\Installer\\setup.exe"
+  args: "--uninstall --multi-install --chrome --system-level --force-uninstall"

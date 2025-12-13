@@ -9,3 +9,7 @@ installer:
 
 detect:
   appx_name: "Slack"
+
+uninstall:
+  type: msix
+  package_name: "Slack"

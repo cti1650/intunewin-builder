@@ -10,3 +10,7 @@ installer:
 
 detect:
   registry_display_name: "Cloudflare WARP"
+
+uninstall:
+  type: msi
+  args: "/x {product_code} /qn"
