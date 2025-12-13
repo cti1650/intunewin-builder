@@ -1,31 +1,24 @@
 param (
   [Parameter(Mandatory)]
-  [ValidateSet("chrome", "slack", "warp")]
   [string]$App
 )
 
 $ErrorActionPreference = "Stop"
 
+Write-Host "Building intunewin for app: $App"
+
 # ==========
-# App 定義
+# Load app definition
 # ==========
-switch ($App) {
-  "chrome" {
-    $url   = "https://dl.google.com/chrome/install/latest/chrome_installer.exe"
-    $setup = "chrome.exe"
-  }
-  "slack" {
-    $url   = "https://slack.com/ssb/download-win64"
-    $setup = "slack.exe"
-  }
-  "warp" {
-    $url   = "https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-x64.msi"
-    $setup = "Cloudflare_WARP_Release-x64.msi"
-  }
-  default {
-    throw "Unknown app: $App"
-  }
+$appDefPath = "apps/$App.yml"
+if (-not (Test-Path $appDefPath)) {
+  throw "App definition not found: $appDefPath"
 }
+
+$appDef = Get-Content $appDefPath | ConvertFrom-Yaml
+
+$url   = $appDef.download.url
+$setup = $appDef.download.file
 
 # ==========
 # Prepare directories
@@ -48,10 +41,13 @@ Invoke-WebRequest -Uri $url -OutFile "app/$setup"
 $file        = Get-Item "app/$setup"
 $hash        = Get-FileHash "app/$setup" -Algorithm SHA256
 $version     = $file.VersionInfo.FileVersion
+if (-not $version) {
+  $version = "unknown"
+}
 $downloadUtc = (Get-Date).ToUniversalTime().ToString("o")
 
 # ==========
-# Download IntuneWinAppUtil (ZIP方式・安定)
+# Download IntuneWinAppUtil
 # ==========
 Write-Host "Downloading IntuneWinAppUtil..."
 
@@ -73,7 +69,7 @@ $toolPath = Get-ChildItem `
   | Select-Object -ExpandProperty FullName
 
 if (-not $toolPath) {
-  throw "IntuneWinAppUtil.exe not found after extraction."
+  throw "IntuneWinAppUtil.exe not found."
 }
 
 # ==========
@@ -87,16 +83,16 @@ Write-Host "Building intunewin..."
   -q
 
 # ==========
-# Rename intunewin with version
+# Rename intunewin
 # ==========
 $intunewin = Get-ChildItem output/intunewin/*.intunewin | Select-Object -First 1
-if ($intunewin -and $version) {
-  $newName = "$App-$version.intunewin"
+if ($intunewin) {
+  $newName = "$($appDef.name)-$version.intunewin"
   Rename-Item -Path $intunewin.FullName -NewName $newName
 }
 
 # ==========
-# Save original installer (traceability)
+# Save original installer
 # ==========
 Copy-Item "app/$setup" "output/installer/$setup" -Force
 
@@ -104,10 +100,12 @@ Copy-Item "app/$setup" "output/installer/$setup" -Force
 # Write metadata
 # ==========
 @"
-app: $App
+app: $($appDef.name)
 download_url: $url
 installer_name: $setup
 file_version: $version
 sha256: $($hash.Hash)
 downloaded_at_utc: $downloadUtc
 "@ | Out-File "output/metadata.txt" -Encoding utf8
+
+Write-Host "Build completed successfully"

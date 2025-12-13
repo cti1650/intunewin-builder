@@ -1,0 +1,12 @@
+name: warp
+
+download:
+  url: https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-x64.msi
+  file: Cloudflare_WARP_Release-x64.msi
+
+installer:
+  type: msi
+  install_args: "/i {installer} /qn"
+
+detect:
+  registry_display_name: "Cloudflare WARP"

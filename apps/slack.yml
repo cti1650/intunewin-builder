@@ -1,0 +1,12 @@
+name: slack
+
+download:
+  url: https://slack.com/ssb/download-win64
+  file: slack.exe
+
+installer:
+  type: exe
+  install_args: "/S"
+
+detect:
+  file: "C:\\Program Files\\Slack\\slack.exe"

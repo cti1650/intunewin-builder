@@ -1,0 +1,33 @@
+name: verify-installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Target application"
+        required: true
+        type: choice
+        options:
+          - chrome
+          - slack
+          - warp
+
+jobs:
+  verify:
+    name: Verify installer (no Intune)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: intunewin-${{ inputs.app }}
+          path: output/
+
+      - name: Verify installer behavior
+        shell: pwsh
+        run: |
+          scripts/verify-installer.ps1 -App "${{ inputs.app }}"

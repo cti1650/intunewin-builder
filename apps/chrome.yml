@@ -1,0 +1,12 @@
+name: chrome
+
+download:
+  url: https://dl.google.com/chrome/install/latest/chrome_installer.exe
+  file: chrome.exe
+
+installer:
+  type: exe
+  install_args: "/silent /install"
+
+detect:
+  file: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
