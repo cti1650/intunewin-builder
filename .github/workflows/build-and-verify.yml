@@ -20,12 +20,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Build intunewin
-        uses: ./actions/build-intunewin
+        uses: ./.github/actions/build-intunewin
         with:
           app: ${{ inputs.app }}
 
       - name: Verify installer (no Intune)
-        uses: ./actions/verify-installer
+        uses: ./.github/actions/verify-installer
         with:
           app: ${{ inputs.app }}
 
