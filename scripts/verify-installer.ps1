@@ -18,7 +18,7 @@ if (-not (Test-Path $appDefPath)) {
 $appDef = Get-Content $appDefPath | ConvertFrom-Yaml
 
 $installerFile = $appDef.download.file
-$installerPath = "output/installer/$installerFile"
+$installerPath = (Resolve-Path "output/installer/$installerFile").Path
 $type          = $appDef.installer.type
 $installArgs   = $appDef.installer.install_args `
   -replace "{installer}", "`"$installerPath`""
