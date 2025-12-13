@@ -25,17 +25,32 @@ switch ($App) {
 }
 
 # ==========
-# Prepare
+# Prepare directories
 # ==========
-New-Item app, output -ItemType Directory -Force | Out-Null
+New-Item `
+  app, `
+  output/intunewin, `
+  output/installer `
+  -ItemType Directory -Force | Out-Null
 
+# ==========
+# Download installer
+# ==========
 Write-Host "Downloading installer..."
 Invoke-WebRequest -Uri $url -OutFile "app/$setup"
 
 # ==========
-# Download IntuneWinAppUtil (ZIP方式・安定版)
+# Collect installer metadata
 # ==========
-Write-Host "Downloading IntuneWinAppUtil (zip)..."
+$file     = Get-Item "app/$setup"
+$hash     = Get-FileHash "app/$setup" -Algorithm SHA256
+$version  = $file.VersionInfo.FileVersion
+$download = (Get-Date).ToUniversalTime().ToString("o")
+
+# ==========
+# Download IntuneWinAppUtil (zip, stable)
+# ==========
+Write-Host "Downloading IntuneWinAppUtil..."
 
 $zipPath  = "IntuneWinAppUtil.zip"
 $toolDir  = "IntuneWinAppUtil"
@@ -55,7 +70,7 @@ $toolPath = Get-ChildItem `
   | Select-Object -ExpandProperty FullName
 
 if (-not $toolPath) {
-  throw "IntuneWinAppUtil.exe not found after extraction."
+  throw "IntuneWinAppUtil.exe not found."
 }
 
 # ==========
@@ -65,22 +80,31 @@ Write-Host "Building intunewin..."
 & $toolPath `
   -c app `
   -s $setup `
-  -o output `
+  -o output/intunewin `
   -q
 
 # ==========
-# Rename with version (best effort)
+# Rename intunewin with version
 # ==========
-try {
-  $file = Get-Item "app/$setup"
-  $version = $file.VersionInfo.FileVersion
-  if ($version) {
-    $intunewin = Get-ChildItem output/*.intunewin | Select-Object -First 1
-    if ($intunewin) {
-      $newName = "$App-$version.intunewin"
-      Rename-Item $intunewin.FullName "output/$newName"
-    }
-  }
-} catch {
-  Write-Host "Version rename skipped."
+$intunewin = Get-ChildItem output/intunewin/*.intunewin | Select-Object -First 1
+if ($intunewin -and $version) {
+  $newName = "$App-$version.intunewin"
+  Rename-Item $intunewin.FullName "output/intunewin/$newName"
 }
+
+# ==========
+# Save original installer (traceability)
+# ==========
+Copy-Item "app/$setup" "output/installer/$setup" -Force
+
+# ==========
+# Write metadata
+# ==========
+@"
+app: $App
+download_url: $url
+installer_name: $setup
+file_version: $version
+sha256: $($hash.Hash)
+downloaded_at_utc: $download
+"@ | Out-File "output/metadata.txt" -Encoding utf8
