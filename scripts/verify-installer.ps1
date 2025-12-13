@@ -5,6 +5,41 @@ param (
 
 $ErrorActionPreference = "Stop"
 
+# ==========
+# Helper functions
+# ==========
+function Get-InstalledAppsSnapshot {
+  $registryPaths = @(
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
+    "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
+  )
+  $registryApps = $registryPaths | ForEach-Object {
+    Get-ItemProperty $_ -ErrorAction SilentlyContinue
+  } | Where-Object { $_.DisplayName } |
+    Select-Object -ExpandProperty DisplayName
+
+  $appxApps = Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
+    Select-Object -ExpandProperty Name
+
+  return @{
+    Registry = @($registryApps)
+    Appx     = @($appxApps)
+  }
+}
+
+function Compare-Snapshots {
+  param($Before, $After)
+
+  $addedRegistry = $After.Registry | Where-Object { $_ -notin $Before.Registry }
+  $addedAppx = $After.Appx | Where-Object { $_ -notin $Before.Appx }
+
+  return @{
+    AddedRegistry = @($addedRegistry)
+    AddedAppx     = @($addedAppx)
+  }
+}
+
 Write-Host "Verifying installer for app: $App"
 
 # ==========
@@ -26,6 +61,13 @@ $installArgs   = $appDef.installer.install_args `
 if (-not (Test-Path $installerPath)) {
   throw "Installer not found: $installerPath"
 }
+
+# ==========
+# Snapshot before install
+# ==========
+Write-Host "Taking snapshot before install..."
+$snapshotBefore = Get-InstalledAppsSnapshot
+Write-Host "Registry apps: $($snapshotBefore.Registry.Count), Appx apps: $($snapshotBefore.Appx.Count)"
 
 # ==========
 # Verify installer file
@@ -107,44 +149,69 @@ Write-Host "Waiting for installation to complete..."
 Start-Sleep -Seconds 10
 
 # ==========
+# Snapshot after install
+# ==========
+Write-Host "Taking snapshot after install..."
+$snapshotAfter = Get-InstalledAppsSnapshot
+Write-Host "Registry apps: $($snapshotAfter.Registry.Count), Appx apps: $($snapshotAfter.Appx.Count)"
+
+$diff = Compare-Snapshots -Before $snapshotBefore -After $snapshotAfter
+
+Write-Host ""
+Write-Host "=== Installation diff ==="
+if ($diff.AddedRegistry.Count -gt 0) {
+  Write-Host "New registry apps:"
+  $diff.AddedRegistry | ForEach-Object { Write-Host "  + $_" }
+} else {
+  Write-Host "No new registry apps detected"
+}
+
+if ($diff.AddedAppx.Count -gt 0) {
+  Write-Host "New Appx packages:"
+  $diff.AddedAppx | ForEach-Object { Write-Host "  + $_" }
+} else {
+  Write-Host "No new Appx packages detected"
+}
+Write-Host "========================="
+Write-Host ""
+
+# ==========
 # Detect
 # ==========
 Write-Host "Detecting installation..."
 $detected = $false
 
 if ($appDef.detect.file) {
+  Write-Host "Checking file: $($appDef.detect.file)"
   $detected = Test-Path $appDef.detect.file
+  Write-Host "File exists: $detected"
 }
 
 if ($appDef.detect.registry_display_name) {
   $searchName = $appDef.detect.registry_display_name
-  $paths = @(
-    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
-    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
-    "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
-  )
-  $allApps = $paths | ForEach-Object {
-    Get-ItemProperty $_ -ErrorAction SilentlyContinue
-  } | Where-Object { $_.DisplayName }
+  Write-Host "Searching for registry app: $searchName"
 
-  Write-Host "Searching registry for: $searchName"
-  Write-Host "Total registered apps: $($allApps.Count)"
-
-  # Search for partial matches to help debug
-  $searchWords = $searchName -split '\s+' | Where-Object { $_.Length -ge 3 }
-  $partialMatches = $allApps | Where-Object {
-    $displayName = $_.DisplayName
-    $searchWords | Where-Object { $displayName -like "*$_*" }
-  }
-  if ($partialMatches) {
-    Write-Host "Partial matches found:"
-    $partialMatches | ForEach-Object { Write-Host "  - $($_.DisplayName)" }
+  # Check in diff first
+  $foundInDiff = $diff.AddedRegistry | Where-Object { $_ -like "*$searchName*" }
+  if ($foundInDiff) {
+    Write-Host "Found in diff: $foundInDiff"
+    $detected = $true
   } else {
-    Write-Host "No partial matches found for keywords: $($searchWords -join ', ')"
-  }
+    # Fallback to full search
+    $paths = @(
+      "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+      "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
+      "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    )
+    $allApps = $paths | ForEach-Object {
+      Get-ItemProperty $_ -ErrorAction SilentlyContinue
+    } | Where-Object { $_.DisplayName }
 
-  $detected = $allApps | Where-Object {
-    $_.DisplayName -like "*$searchName*"
+    $match = $allApps | Where-Object { $_.DisplayName -like "*$searchName*" }
+    if ($match) {
+      Write-Host "Found in registry: $($match.DisplayName)"
+      $detected = $true
+    }
   }
 }
 
@@ -152,15 +219,19 @@ if ($appDef.detect.appx_name) {
   $searchName = $appDef.detect.appx_name
   Write-Host "Searching for Appx package: $searchName"
 
-  $appxPackages = Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
-    Where-Object { $_.Name -like "*$searchName*" }
-
-  if ($appxPackages) {
-    Write-Host "Found Appx packages:"
-    $appxPackages | ForEach-Object { Write-Host "  - $($_.Name) ($($_.Version))" }
+  # Check in diff first
+  $foundInDiff = $diff.AddedAppx | Where-Object { $_ -like "*$searchName*" }
+  if ($foundInDiff) {
+    Write-Host "Found in diff: $foundInDiff"
     $detected = $true
   } else {
-    Write-Host "No Appx package found matching: $searchName"
+    # Fallback to full search
+    $appxPackages = Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
+      Where-Object { $_.Name -like "*$searchName*" }
+    if ($appxPackages) {
+      Write-Host "Found Appx: $($appxPackages.Name)"
+      $detected = $true
+    }
   }
 }
 
