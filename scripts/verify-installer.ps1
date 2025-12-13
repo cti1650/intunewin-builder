@@ -59,9 +59,18 @@ if ($appDef.detect.registry_display_name) {
     "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
     "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
   )
-  $detected = $paths | ForEach-Object {
+  $allApps = $paths | ForEach-Object {
     Get-ItemProperty $_ -ErrorAction SilentlyContinue
-  } | Where-Object {
+  } | Where-Object { $_.DisplayName }
+
+  Write-Host "Searching for: $($appDef.detect.registry_display_name)"
+  Write-Host "Found $($allApps.Count) installed apps"
+  Write-Host "Apps containing 'Cloudflare' or 'WARP':"
+  $allApps | Where-Object {
+    $_.DisplayName -like "*Cloudflare*" -or $_.DisplayName -like "*WARP*"
+  } | ForEach-Object { Write-Host "  - $($_.DisplayName)" }
+
+  $detected = $allApps | Where-Object {
     $_.DisplayName -like "*$($appDef.detect.registry_display_name)*"
   }
 }
