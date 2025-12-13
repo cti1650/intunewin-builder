@@ -33,7 +33,25 @@ New-Item `
 # Download installer
 # ==========
 Write-Host "Downloading installer..."
-Invoke-WebRequest -Uri $url -OutFile "app/$setup"
+Write-Host "URL: $url"
+
+$response = Invoke-WebRequest -Uri $url -OutFile "app/$setup" -PassThru
+Write-Host "Content-Type: $($response.Headers['Content-Type'])"
+if ($response.Headers['Content-Disposition']) {
+  Write-Host "Content-Disposition: $($response.Headers['Content-Disposition'])"
+}
+
+$downloadedFile = Get-Item "app/$setup"
+Write-Host "Downloaded file size: $([math]::Round($downloadedFile.Length / 1MB, 2)) MB"
+
+# Verify it's actually an MSI file (MSI files start with 0xD0CF11E0)
+$bytes = [System.IO.File]::ReadAllBytes("app/$setup")[0..3]
+$header = [BitConverter]::ToString($bytes) -replace '-',''
+if ($header -ne "D0CF11E0") {
+  Write-Host "WARNING: File does not appear to be a valid MSI (header: $header)"
+  Write-Host "First 500 bytes as text:"
+  Get-Content "app/$setup" -TotalCount 10
+}
 
 # ==========
 # Collect installer metadata
