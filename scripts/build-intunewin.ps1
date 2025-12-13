@@ -44,12 +44,19 @@ if ($response.Headers['Content-Disposition']) {
 $downloadedFile = Get-Item "app/$setup"
 Write-Host "Downloaded file size: $([math]::Round($downloadedFile.Length / 1MB, 2)) MB"
 
-# Verify it's actually an MSI file (MSI files start with 0xD0CF11E0)
+# Verify file header based on extension
 $bytes = [System.IO.File]::ReadAllBytes("app/$setup")[0..3]
 $header = [BitConverter]::ToString($bytes) -replace '-',''
-if ($header -ne "D0CF11E0") {
-  Write-Host "WARNING: File does not appear to be a valid MSI (header: $header)"
-  Write-Host "First 500 bytes as text:"
+Write-Host "File header: $header"
+
+$extension = [System.IO.Path]::GetExtension($setup).ToLower()
+if ($extension -eq ".msi" -and $header -ne "D0CF11E0") {
+  Write-Host "WARNING: File does not appear to be a valid MSI"
+  Write-Host "First 10 lines:"
+  Get-Content "app/$setup" -TotalCount 10
+} elseif ($extension -eq ".exe" -and $header -notlike "4D5A*") {
+  Write-Host "WARNING: File does not appear to be a valid EXE"
+  Write-Host "First 10 lines:"
   Get-Content "app/$setup" -TotalCount 10
 }
 

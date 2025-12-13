@@ -6,7 +6,8 @@ download:
 
 installer:
   type: exe
-  install_args: "/S"
+  install_args: "/s /S"
+  timeout: 300
 
 detect:
   file: "C:\\Program Files\\Slack\\slack.exe"

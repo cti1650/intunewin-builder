@@ -57,12 +57,31 @@ Write-Host "Installing..."
 Write-Host "Installer type: $type"
 Write-Host "Install args: $installArgs"
 
+$timeoutSeconds = $appDef.installer.timeout
+if ($timeoutSeconds) {
+  Write-Host "Timeout: $timeoutSeconds seconds"
+}
+
 if ($type -eq "msi") {
   $process = Start-Process msiexec `
     -ArgumentList $installArgs `
     -Wait `
     -PassThru
   Write-Host "msiexec exit code: $($process.ExitCode)"
+} elseif ($timeoutSeconds) {
+  $process = Start-Process `
+    -FilePath $installerPath `
+    -ArgumentList $installArgs `
+    -PassThru
+
+  $completed = $process.WaitForExit($timeoutSeconds * 1000)
+  if ($completed) {
+    Write-Host "Installer exit code: $($process.ExitCode)"
+  } else {
+    Write-Host "WARNING: Installer timed out after $timeoutSeconds seconds, killing process..."
+    $process | Stop-Process -Force
+    Write-Host "Process killed, continuing with detection..."
+  }
 } else {
   $process = Start-Process `
     -FilePath $installerPath `
