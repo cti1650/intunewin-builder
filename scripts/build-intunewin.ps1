@@ -46,7 +46,9 @@ Invoke-WebRequest `
 # Build intunewin
 # ==========
 Write-Host "Building intunewin..."
-.\$tool `
+$toolPath = Join-Path $PWD $tool
+
+& $toolPath `
   -c app `
   -s $setup `
   -o output `
