@@ -28,11 +28,27 @@ if (-not (Test-Path $installerPath)) {
 }
 
 # ==========
+# Verify installer file
+# ==========
+Write-Host "Verifying installer file..."
+Write-Host "Installer path: $installerPath"
+$installerFile = Get-Item $installerPath
+Write-Host "File size: $([math]::Round($installerFile.Length / 1MB, 2)) MB"
+
+$bytes = [System.IO.File]::ReadAllBytes($installerPath)[0..3]
+$header = [BitConverter]::ToString($bytes) -replace '-',''
+Write-Host "File header: $header"
+if ($header -ne "D0CF11E0") {
+  Write-Host "WARNING: File does not appear to be a valid MSI"
+  Write-Host "First 10 lines:"
+  Get-Content $installerPath -TotalCount 10
+}
+
+# ==========
 # Install
 # ==========
 Write-Host "Installing..."
 Write-Host "Installer type: $type"
-Write-Host "Installer path: $installerPath"
 Write-Host "Install args: $installArgs"
 
 if ($type -eq "msi") {
