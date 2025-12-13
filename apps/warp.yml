@@ -1,7 +1,7 @@
 name: warp
 
 download:
-  url: https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-x64.msi
+  url: https://downloads.cloudflareclient.com/v1/download/windows/ga
   file: Cloudflare_WARP_Release-x64.msi
 
 installer:
