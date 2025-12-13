@@ -14,12 +14,14 @@ on:
 
 jobs:
   build:
+    name: Build intunewin
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - name: Build intunewin
+      - name: Build intunewin package
         shell: pwsh
         run: |
           scripts/build-intunewin.ps1 -App "${{ inputs.app }}"
@@ -27,5 +29,5 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: intunewin
-          path: output/*.intunewin
+          name: intunewin-${{ inputs.app }}
+          path: output/
