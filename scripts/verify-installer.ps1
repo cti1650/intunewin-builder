@@ -31,18 +31,27 @@ if (-not (Test-Path $installerPath)) {
 # Install
 # ==========
 Write-Host "Installing..."
+Write-Host "Installer type: $type"
+Write-Host "Installer path: $installerPath"
+Write-Host "Install args: $installArgs"
+
 if ($type -eq "msi") {
-  Start-Process msiexec `
+  $process = Start-Process msiexec `
     -ArgumentList $installArgs `
-    -Wait
+    -Wait `
+    -PassThru
+  Write-Host "msiexec exit code: $($process.ExitCode)"
 } else {
-  Start-Process `
+  $process = Start-Process `
     -FilePath $installerPath `
     -ArgumentList $installArgs `
-    -Wait
+    -Wait `
+    -PassThru
+  Write-Host "Installer exit code: $($process.ExitCode)"
 }
 
-Start-Sleep -Seconds 5
+Write-Host "Waiting for installation to complete..."
+Start-Sleep -Seconds 10
 
 # ==========
 # Detect
@@ -55,6 +64,7 @@ if ($appDef.detect.file) {
 }
 
 if ($appDef.detect.registry_display_name) {
+  $searchName = $appDef.detect.registry_display_name
   $paths = @(
     "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
     "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
@@ -63,15 +73,24 @@ if ($appDef.detect.registry_display_name) {
     Get-ItemProperty $_ -ErrorAction SilentlyContinue
   } | Where-Object { $_.DisplayName }
 
-  Write-Host "Searching for: $($appDef.detect.registry_display_name)"
-  Write-Host "Found $($allApps.Count) installed apps"
-  Write-Host "Apps containing 'Cloudflare' or 'WARP':"
-  $allApps | Where-Object {
-    $_.DisplayName -like "*Cloudflare*" -or $_.DisplayName -like "*WARP*"
-  } | ForEach-Object { Write-Host "  - $($_.DisplayName)" }
+  Write-Host "Searching registry for: $searchName"
+  Write-Host "Total registered apps: $($allApps.Count)"
+
+  # Search for partial matches to help debug
+  $searchWords = $searchName -split '\s+' | Where-Object { $_.Length -ge 3 }
+  $partialMatches = $allApps | Where-Object {
+    $displayName = $_.DisplayName
+    $searchWords | Where-Object { $displayName -like "*$_*" }
+  }
+  if ($partialMatches) {
+    Write-Host "Partial matches found:"
+    $partialMatches | ForEach-Object { Write-Host "  - $($_.DisplayName)" }
+  } else {
+    Write-Host "No partial matches found for keywords: $($searchWords -join ', ')"
+  }
 
   $detected = $allApps | Where-Object {
-    $_.DisplayName -like "*$($appDef.detect.registry_display_name)*"
+    $_.DisplayName -like "*$searchName*"
   }
 }
 
