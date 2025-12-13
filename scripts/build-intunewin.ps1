@@ -39,7 +39,7 @@ $tool = "IntuneWinAppUtil.exe"
 
 Write-Host "Downloading IntuneWinAppUtil..."
 Invoke-WebRequest `
-  -Uri "https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/releases/latest/download/$tool" `
+  -Uri "https://aka.ms/IntuneWinAppUtil" `
   -OutFile $tool
 
 # ==========
