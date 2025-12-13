@@ -19,6 +19,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install powershell-yaml
+        shell: pwsh
+        run: |
+          Install-Module powershell-yaml -Scope CurrentUser -Force
+
       - name: Build intunewin
         uses: ./.github/actions/build-intunewin
         with:
