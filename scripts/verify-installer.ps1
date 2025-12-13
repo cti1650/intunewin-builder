@@ -55,11 +55,15 @@ if ($appDef.detect.file) {
 }
 
 if ($appDef.detect.registry_display_name) {
-  $detected = Get-ItemProperty `
-    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*" `
-    | Where-Object {
-        $_.DisplayName -like "*$($appDef.detect.registry_display_name)*"
-      }
+  $paths = @(
+    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+  )
+  $detected = $paths | ForEach-Object {
+    Get-ItemProperty $_ -ErrorAction SilentlyContinue
+  } | Where-Object {
+    $_.DisplayName -like "*$($appDef.detect.registry_display_name)*"
+  }
 }
 
 if (-not $detected) {
