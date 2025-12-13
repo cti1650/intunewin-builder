@@ -32,14 +32,20 @@ if (-not (Test-Path $installerPath)) {
 # ==========
 Write-Host "Verifying installer file..."
 Write-Host "Installer path: $installerPath"
-$installerFile = Get-Item $installerPath
-Write-Host "File size: $([math]::Round($installerFile.Length / 1MB, 2)) MB"
+$installerFileInfo = Get-Item $installerPath
+Write-Host "File size: $([math]::Round($installerFileInfo.Length / 1MB, 2)) MB"
 
 $bytes = [System.IO.File]::ReadAllBytes($installerPath)[0..3]
 $header = [BitConverter]::ToString($bytes) -replace '-',''
 Write-Host "File header: $header"
-if ($header -ne "D0CF11E0") {
+
+# Validate file header based on installer type
+if ($type -eq "msi" -and $header -ne "D0CF11E0") {
   Write-Host "WARNING: File does not appear to be a valid MSI"
+  Write-Host "First 10 lines:"
+  Get-Content $installerPath -TotalCount 10
+} elseif ($type -eq "exe" -and $header -notlike "4D5A*") {
+  Write-Host "WARNING: File does not appear to be a valid EXE"
   Write-Host "First 10 lines:"
   Get-Content $installerPath -TotalCount 10
 }
