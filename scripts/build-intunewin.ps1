@@ -22,6 +22,9 @@ switch ($App) {
     $url   = "https://1111-releases.cloudflareclient.com/windows/Cloudflare_WARP_Release-x64.msi"
     $setup = "Cloudflare_WARP_Release-x64.msi"
   }
+  default {
+    throw "Unknown app: $App"
+  }
 }
 
 # ==========
@@ -42,13 +45,13 @@ Invoke-WebRequest -Uri $url -OutFile "app/$setup"
 # ==========
 # Collect installer metadata
 # ==========
-$file     = Get-Item "app/$setup"
-$hash     = Get-FileHash "app/$setup" -Algorithm SHA256
-$version  = $file.VersionInfo.FileVersion
-$download = (Get-Date).ToUniversalTime().ToString("o")
+$file        = Get-Item "app/$setup"
+$hash        = Get-FileHash "app/$setup" -Algorithm SHA256
+$version     = $file.VersionInfo.FileVersion
+$downloadUtc = (Get-Date).ToUniversalTime().ToString("o")
 
 # ==========
-# Download IntuneWinAppUtil (zip, stable)
+# Download IntuneWinAppUtil (ZIP方式・安定)
 # ==========
 Write-Host "Downloading IntuneWinAppUtil..."
 
@@ -70,7 +73,7 @@ $toolPath = Get-ChildItem `
   | Select-Object -ExpandProperty FullName
 
 if (-not $toolPath) {
-  throw "IntuneWinAppUtil.exe not found."
+  throw "IntuneWinAppUtil.exe not found after extraction."
 }
 
 # ==========
@@ -89,7 +92,7 @@ Write-Host "Building intunewin..."
 $intunewin = Get-ChildItem output/intunewin/*.intunewin | Select-Object -First 1
 if ($intunewin -and $version) {
   $newName = "$App-$version.intunewin"
-  Rename-Item $intunewin.FullName "output/intunewin/$newName"
+  Rename-Item -Path $intunewin.FullName -NewName $newName
 }
 
 # ==========
@@ -106,5 +109,5 @@ download_url: $url
 installer_name: $setup
 file_version: $version
 sha256: $($hash.Hash)
-downloaded_at_utc: $download
+downloaded_at_utc: $downloadUtc
 "@ | Out-File "output/metadata.txt" -Encoding utf8
