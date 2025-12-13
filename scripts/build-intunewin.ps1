@@ -33,21 +33,35 @@ Write-Host "Downloading installer..."
 Invoke-WebRequest -Uri $url -OutFile "app/$setup"
 
 # ==========
-# Intune Tool
+# Download IntuneWinAppUtil (ZIP方式・安定版)
 # ==========
-$tool = "IntuneWinAppUtil.exe"
+Write-Host "Downloading IntuneWinAppUtil (zip)..."
 
-Write-Host "Downloading IntuneWinAppUtil..."
+$zipPath  = "IntuneWinAppUtil.zip"
+$toolDir  = "IntuneWinAppUtil"
+$toolName = "IntuneWinAppUtil.exe"
+
 Invoke-WebRequest `
-  -Uri "https://aka.ms/IntuneWinAppUtil" `
-  -OutFile $tool
+  -Uri "https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/archive/refs/heads/master.zip" `
+  -OutFile $zipPath
+
+Expand-Archive -Path $zipPath -DestinationPath $toolDir -Force
+
+$toolPath = Get-ChildItem `
+  -Path $toolDir `
+  -Recurse `
+  -Filter $toolName `
+  | Select-Object -First 1 `
+  | Select-Object -ExpandProperty FullName
+
+if (-not $toolPath) {
+  throw "IntuneWinAppUtil.exe not found after extraction."
+}
 
 # ==========
 # Build intunewin
 # ==========
 Write-Host "Building intunewin..."
-$toolPath = Join-Path $PWD $tool
-
 & $toolPath `
   -c app `
   -s $setup `
@@ -62,10 +76,11 @@ try {
   $version = $file.VersionInfo.FileVersion
   if ($version) {
     $intunewin = Get-ChildItem output/*.intunewin | Select-Object -First 1
-    $newName = "$App-$version.intunewin"
-    Rename-Item $intunewin.FullName "output/$newName"
+    if ($intunewin) {
+      $newName = "$App-$version.intunewin"
+      Rename-Item $intunewin.FullName "output/$newName"
+    }
   }
 } catch {
   Write-Host "Version rename skipped."
 }
-
