@@ -1,0 +1,15 @@
+name: build-intunewin
+description: Build intunewin package from app definition
+
+inputs:
+  app:
+    description: Target application name
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Build intunewin
+      shell: pwsh
+      run: |
+        scripts/build-intunewin.ps1 -App "${{ inputs.app }}"

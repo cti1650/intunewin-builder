@@ -1,0 +1,15 @@
+name: verify-installer
+description: Verify installer behavior without Intune
+
+inputs:
+  app:
+    description: Target application name
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Verify installer
+      shell: pwsh
+      run: |
+        scripts/verify-installer.ps1 -App "${{ inputs.app }}"

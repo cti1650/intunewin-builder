@@ -1,0 +1,36 @@
+name: build-and-verify-intunewin
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: Target application
+        required: true
+        type: choice
+        options:
+          - chrome
+          - slack
+          - warp
+
+jobs:
+  build_and_verify:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build intunewin
+        uses: ./actions/build-intunewin
+        with:
+          app: ${{ inputs.app }}
+
+      - name: Verify installer (no Intune)
+        uses: ./actions/verify-installer
+        with:
+          app: ${{ inputs.app }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: intunewin-${{ inputs.app }}
+          path: output/
