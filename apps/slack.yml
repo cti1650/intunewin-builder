@@ -1,13 +1,11 @@
 name: slack
 
 download:
-  url: https://slack.com/ssb/download-win64
-  file: slack.exe
+  url: https://slack.com/api/desktop.latestRelease?arch=x64&variant=msix&redirect=true
+  file: slack.msix
 
 installer:
-  type: exe
-  install_args: "/s /S"
-  timeout: 300
+  type: msix
 
 detect:
-  file: "C:\\Program Files\\Slack\\slack.exe"
+  appx_name: "Slack"

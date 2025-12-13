@@ -58,6 +58,10 @@ if ($extension -eq ".msi" -and $header -ne "D0CF11E0") {
   Write-Host "WARNING: File does not appear to be a valid EXE"
   Write-Host "First 10 lines:"
   Get-Content "app/$setup" -TotalCount 10
+} elseif ($extension -eq ".msix" -and $header -ne "504B0304") {
+  Write-Host "WARNING: File does not appear to be a valid MSIX (ZIP-based package)"
+  Write-Host "First 10 lines:"
+  Get-Content "app/$setup" -TotalCount 10
 }
 
 # ==========

@@ -48,6 +48,10 @@ if ($type -eq "msi" -and $header -ne "D0CF11E0") {
   Write-Host "WARNING: File does not appear to be a valid EXE"
   Write-Host "First 10 lines:"
   Get-Content $installerPath -TotalCount 10
+} elseif ($type -eq "msix" -and $header -ne "504B0304") {
+  Write-Host "WARNING: File does not appear to be a valid MSIX (ZIP-based package)"
+  Write-Host "First 10 lines:"
+  Get-Content $installerPath -TotalCount 10
 }
 
 # ==========
@@ -68,6 +72,14 @@ if ($type -eq "msi") {
     -Wait `
     -PassThru
   Write-Host "msiexec exit code: $($process.ExitCode)"
+} elseif ($type -eq "msix") {
+  try {
+    Add-AppxPackage -Path $installerPath
+    Write-Host "MSIX installation completed"
+  } catch {
+    Write-Host "MSIX installation failed: $_"
+    throw
+  }
 } elseif ($timeoutSeconds) {
   $process = Start-Process `
     -FilePath $installerPath `
@@ -108,7 +120,8 @@ if ($appDef.detect.registry_display_name) {
   $searchName = $appDef.detect.registry_display_name
   $paths = @(
     "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
-    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
+    "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
   )
   $allApps = $paths | ForEach-Object {
     Get-ItemProperty $_ -ErrorAction SilentlyContinue
@@ -132,6 +145,22 @@ if ($appDef.detect.registry_display_name) {
 
   $detected = $allApps | Where-Object {
     $_.DisplayName -like "*$searchName*"
+  }
+}
+
+if ($appDef.detect.appx_name) {
+  $searchName = $appDef.detect.appx_name
+  Write-Host "Searching for Appx package: $searchName"
+
+  $appxPackages = Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -like "*$searchName*" }
+
+  if ($appxPackages) {
+    Write-Host "Found Appx packages:"
+    $appxPackages | ForEach-Object { Write-Host "  - $($_.Name) ($($_.Version))" }
+    $detected = $true
+  } else {
+    Write-Host "No Appx package found matching: $searchName"
   }
 }
 
