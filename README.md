@@ -52,6 +52,7 @@ installer:
 
 detect:
   file: ファイルパス（EXE用）
+  version: 必要最低バージョン（オプション、空欄でスキップ）
   registry_display_name: 表示名（MSI用）
   appx_name: パッケージ名（MSIX用）
 
