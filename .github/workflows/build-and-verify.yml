@@ -11,6 +11,7 @@ on:
           - chrome
           - slack
           - warp
+          - zoom
 
 jobs:
   build_and_verify:

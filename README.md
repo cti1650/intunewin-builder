@@ -30,6 +30,7 @@ Intune 自体はブラックボックスとして扱い、
 | Google Chrome | EXE | ファイル存在確認 |
 | Slack | MSIX | Appxパッケージ |
 | Cloudflare WARP | MSI | レジストリ |
+| Zoom Workplace | MSI | レジストリ |
 
 ## アプリ定義ファイル (YAML)
 
