@@ -1,0 +1,16 @@
+name: zoom
+
+download:
+  url: https://zoom.us/client/latest/ZoomInstallerFull.msi
+  file: ZoomInstallerFull.msi
+
+installer:
+  type: msi
+  install_args: "/i {installer} /qn ZoomAutoUpdate=\"true\""
+
+detect:
+  registry_display_name: "Zoom Workplace"
+
+uninstall:
+  type: msi
+  args: "/x {product_code} /qn"
