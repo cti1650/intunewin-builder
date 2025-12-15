@@ -1,0 +1,43 @@
+name: script-based-verify
+
+on:
+  workflow_dispatch:
+    inputs:
+      app:
+        description: "Target application (YAMLベース)"
+        required: true
+        type: choice
+        options:
+          - slack_script_based
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install powershell-yaml
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module powershell-yaml -Scope CurrentUser -Force
+
+      - name: Build script-based intunewin
+        shell: pwsh
+        run: |
+          scripts/build-script-based.ps1 -App "${{ inputs.app }}"
+
+      - name: Verify installer
+        shell: pwsh
+        run: |
+          scripts/verify-installer.ps1 -App "${{ inputs.app }}"
+        timeout-minutes: 10
+
+      - name: Upload artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: intunewin-${{ inputs.app }}
+          path: output/
