@@ -10,7 +10,7 @@ installer:
 
 detect:
   # 検証用にエラーになるように変更
-  file: "C:\\Program Files\\Cloudflare\\Cloudflare WARP\\Cloudflare WARP2.exe"
+  file: "C:\\Program Files\\Cloudflare\\Cloudflare WARP\\Cloudflare WARP.exe"
   version: "2025.999.558.0"
   registry_display_name: "Cloudflare WARP"
 

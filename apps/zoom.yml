@@ -10,7 +10,7 @@ installer:
 
 detect:
   # 検証用にエラーになるように変更
-  file: "C:\\Program Files\\Zoom\\bin\\Zoom2.exe"
+  file: "C:\\Program Files\\Zoom\\bin\\Zoom.exe"
   version: "999.0.999.0"
   registry_display_name: "Zoom Workplace"
 

@@ -10,7 +10,7 @@ installer:
 
 detect:
   # 検証用にエラーになるように変更
-  file: "C:\\Program Files\\Slack\\slack2.exe"
+  file: "C:\\Program Files\\Slack\\slack.exe"
   version: "999.0.999.0"
   registry_display_name: "Slack"
 
