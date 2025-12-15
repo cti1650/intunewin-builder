@@ -11,6 +11,9 @@ $ProgressPreference = 'SilentlyContinue'
 # ==========
 $summary = [ordered]@{
     AppName           = $App
+    DisplayName       = ""
+    InstallPath       = ""
+    InstalledVersion  = ""
     OSArchitecture    = if ([Environment]::Is64BitOperatingSystem) { "64-bit" } else { "32-bit" }
     AppArchitecture   = "Unknown"
     ArchCheck         = "Not Checked"
@@ -204,6 +207,8 @@ try {
         $searchName = $appDef.detect.registry_display_name
         if ($diff.AddedRegistry | Where-Object { $_ -like "*$searchName*" }) { $detected = $true }
         elseif ((Get-InstalledAppsSnapshot).Registry | Where-Object { $_ -like "*$searchName*" }) { $detected = $true }
+        # DisplayNameをサマリーに設定
+        $summary.DisplayName = $searchName
     }
     if ($appDef.detect.appx_name) {
         $searchName = $appDef.detect.appx_name
@@ -212,9 +217,17 @@ try {
     }
     if ($appDef.detect.file -and (Test-Path $appDef.detect.file)) {
         $detected = $true
+        $summary.InstallPath = $appDef.detect.file
+
+        # バージョン取得
+        $fileInfo = Get-Item $appDef.detect.file
+        $installedVersion = $fileInfo.VersionInfo.FileVersion
+        if ($installedVersion) {
+            $summary.InstalledVersion = $installedVersion
+        }
+
         # バージョンチェック（指定されている場合のみ）
         if ($appDef.detect.version) {
-            $installedVersion = (Get-Item $appDef.detect.file).VersionInfo.FileVersion
             $requiredVersion = $appDef.detect.version
             Write-Host "Installed Version: $installedVersion"
             Write-Host "Required Version : $requiredVersion"
