@@ -10,10 +10,10 @@ runs:
   using: composite
   steps:
     - name: Install powershell-yaml
-        shell: pwsh
-        run: |
-          Set-PSRepository PSGallery -InstallationPolicy Trusted
-          Install-Module powershell-yaml -Scope CurrentUser -Force
+      shell: pwsh
+      run: |
+        Set-PSRepository PSGallery -InstallationPolicy Trusted
+        Install-Module powershell-yaml -Scope CurrentUser -Force
 
     - name: Verify installer
       shell: pwsh
