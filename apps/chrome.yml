@@ -9,8 +9,9 @@ installer:
   install_args: "/i {installer} /qn /norestart"
 
 detect:
-  file: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
-  version: ""
+  # 検証用にエラーになるように変更
+  file: "C:\\Program Files\\Google\\Chrome\\Application\\chrome2.exe"
+  version: "999.0.999.0"
   registry_display_name: "Google Chrome"
 
 uninstall:
