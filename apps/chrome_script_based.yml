@@ -1,0 +1,19 @@
+name: chrome_script_based
+
+script_based: true
+
+download:
+  url: https://dl.google.com/chrome/install/googlechromestandaloneenterprise64.msi
+
+installer:
+  type: script
+  install_args: ""
+
+detect:
+  file: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+  version: "143.0.7499.110"
+  registry_display_name: "Google Chrome"
+
+uninstall:
+  type: script
+  registry_name: "Google Chrome"

@@ -1,0 +1,19 @@
+name: warp_script_based
+
+script_based: true
+
+download:
+  url: https://downloads.cloudflareclient.com/v1/download/windows/ga
+
+installer:
+  type: script
+  install_args: ""
+
+detect:
+  file: "C:\\Program Files\\Cloudflare\\Cloudflare WARP\\Cloudflare WARP.exe"
+  version: "2025.9.558.0"
+  registry_display_name: "Cloudflare WARP"
+
+uninstall:
+  type: script
+  registry_name: "Cloudflare WARP"

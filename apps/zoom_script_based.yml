@@ -1,0 +1,19 @@
+name: zoom_script_based
+
+script_based: true
+
+download:
+  url: "https://zoom.us/client/latest/ZoomInstallerFull.msi?archType=x64"
+
+installer:
+  type: script
+  install_args: "ZoomAutoUpdate=\"true\""
+
+detect:
+  file: "C:\\Program Files\\Zoom\\bin\\Zoom.exe"
+  version: "6.7.0.24657"
+  registry_display_name: "Zoom Workplace"
+
+uninstall:
+  type: script
+  registry_name: "Zoom Workplace"

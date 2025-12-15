@@ -1,0 +1,59 @@
+name: script-based-verify-apps
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '0 0 * * *'
+
+jobs:
+  discover-apps:
+    runs-on: ubuntu-latest
+    outputs:
+      app_matrix: ${{ steps.set-matrix.outputs.app_matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Discover script_based app definitions
+        id: set-matrix
+        shell: pwsh
+        run: |
+          # script_basedはファイル名に_script_basedが含まれるもののみ
+          $apps = Get-ChildItem -Path "apps" -Filter "*_script_based.yml" |
+            Select-Object -ExpandProperty BaseName
+          $json = ConvertTo-Json -Compress @($apps)
+          "app_matrix=$json" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+  verify-matrix:
+    needs: discover-apps
+    runs-on: windows-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJson(needs.discover-apps.outputs.app_matrix) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install powershell-yaml
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module powershell-yaml -Scope CurrentUser -Force
+
+      - name: Build script-based intunewin
+        shell: pwsh
+        run: |
+          scripts/build-script-based.ps1 -App "${{ matrix.app }}"
+
+      - name: Verify installer
+        shell: pwsh
+        run: |
+          scripts/verify-installer.ps1 -App "${{ matrix.app }}"
+        timeout-minutes: 10
+
+      - name: Upload artifact
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: intunewin-${{ matrix.app }}
+          path: output/
