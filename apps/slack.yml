@@ -9,9 +9,8 @@ installer:
   install_args: "/i {installer} /qn /norestart ALLUSERS=1"
 
 detect:
-  # 検証用にエラーになるように変更
   file: "C:\\Program Files\\Slack\\slack.exe"
-  version: "999.0.999.0"
+  version: "4.47.69.0"
   registry_display_name: "Slack"
 
 uninstall:

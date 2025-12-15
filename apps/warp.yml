@@ -9,9 +9,8 @@ installer:
   install_args: "/i {installer} /qn /norestart"
 
 detect:
-  # 検証用にエラーになるように変更
   file: "C:\\Program Files\\Cloudflare\\Cloudflare WARP\\Cloudflare WARP.exe"
-  version: "2025.999.558.0"
+  version: "2025.9.558.0"
   registry_display_name: "Cloudflare WARP"
 
 uninstall:

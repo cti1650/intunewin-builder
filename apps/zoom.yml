@@ -9,9 +9,8 @@ installer:
   install_args: "/i {installer} /qn /norestart ZoomAutoUpdate=\"true\""
 
 detect:
-  # 検証用にエラーになるように変更
   file: "C:\\Program Files\\Zoom\\bin\\Zoom.exe"
-  version: "999.0.999.0"
+  version: "6.7.0.24657"
   registry_display_name: "Zoom Workplace"
 
 uninstall:
