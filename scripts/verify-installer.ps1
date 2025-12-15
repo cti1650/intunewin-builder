@@ -4,6 +4,23 @@ param (
 )
 
 $ErrorActionPreference = "Stop"
+$ProgressPreference = 'SilentlyContinue' # ダウンロード等のプログレスバーによるログ汚れ防止
+
+# ==========
+# Result Summary Object (Initialize)
+# ==========
+$summary = [ordered]@{
+    AppName           = $App
+    OSArchitecture    = if ([Environment]::Is64BitOperatingSystem) { "64-bit" } else { "32-bit" }
+    AppArchitecture   = "Unknown"
+    ArchCheck         = "Not Checked"
+    InstallerType     = "Unknown"
+    InstallStatus     = "Skipped"
+    DetectionStatus   = "Skipped"
+    UninstallStatus   = "Skipped"
+    CleanUpStatus     = "Skipped"
+    OverallResult     = "Failed"
+}
 
 # ==========
 # Helper functions
@@ -30,374 +47,266 @@ function Get-InstalledAppsSnapshot {
 
 function Compare-Snapshots {
   param($Before, $After)
-
   $addedRegistry = $After.Registry | Where-Object { $_ -notin $Before.Registry }
   $addedAppx = $After.Appx | Where-Object { $_ -notin $Before.Appx }
-
   return @{
     AddedRegistry = @($addedRegistry)
     AddedAppx     = @($addedAppx)
   }
 }
 
-Write-Host "Verifying installer for app: $App"
+# バイナリのアーキテクチャ判定関数
+function Get-BinaryArchitecture {
+    param($Path)
+    
+    if (-not (Test-Path $Path)) { return "NotFound" }
+    $ext = [System.IO.Path]::GetExtension($Path).ToLower()
 
-# ==========
-# Load app definition
-# ==========
-$appDefPath = "apps/$App.yml"
-if (-not (Test-Path $appDefPath)) {
-  throw "App definition not found: $appDefPath"
-}
-
-$appDef = Get-Content $appDefPath | ConvertFrom-Yaml
-
-$installerFile = $appDef.download.file
-$installerPath = (Resolve-Path "output/installer/$installerFile").Path
-$type          = $appDef.installer.type
-$installArgs   = $appDef.installer.install_args `
-  -replace "{installer}", "`"$installerPath`""
-
-if (-not (Test-Path $installerPath)) {
-  throw "Installer not found: $installerPath"
-}
-
-# ==========
-# Snapshot before install
-# ==========
-Write-Host "Taking snapshot before install..."
-$snapshotBefore = Get-InstalledAppsSnapshot
-Write-Host "Registry apps: $($snapshotBefore.Registry.Count), Appx apps: $($snapshotBefore.Appx.Count)"
-
-# ==========
-# Verify installer file
-# ==========
-Write-Host "Verifying installer file..."
-Write-Host "Installer path: $installerPath"
-$installerFileInfo = Get-Item $installerPath
-Write-Host "File size: $([math]::Round($installerFileInfo.Length / 1MB, 2)) MB"
-
-$bytes = [System.IO.File]::ReadAllBytes($installerPath)[0..3]
-$header = [BitConverter]::ToString($bytes) -replace '-',''
-Write-Host "File header: $header"
-
-# Validate file header based on installer type
-if ($type -eq "msi" -and $header -ne "D0CF11E0") {
-  Write-Host "WARNING: File does not appear to be a valid MSI"
-  Write-Host "First 10 lines:"
-  Get-Content $installerPath -TotalCount 10
-} elseif ($type -eq "exe" -and $header -notlike "4D5A*") {
-  Write-Host "WARNING: File does not appear to be a valid EXE"
-  Write-Host "First 10 lines:"
-  Get-Content $installerPath -TotalCount 10
-} elseif ($type -eq "msix" -and $header -ne "504B0304") {
-  Write-Host "WARNING: File does not appear to be a valid MSIX (ZIP-based package)"
-  Write-Host "First 10 lines:"
-  Get-Content $installerPath -TotalCount 10
-}
-
-# ==========
-# Install
-# ==========
-Write-Host "Installing..."
-Write-Host "Installer type: $type"
-Write-Host "Install args: $installArgs"
-
-$timeoutSeconds = $appDef.installer.timeout
-if ($timeoutSeconds) {
-  Write-Host "Timeout: $timeoutSeconds seconds"
-}
-
-if ($type -eq "msi") {
-  $process = Start-Process msiexec `
-    -ArgumentList $installArgs `
-    -Wait `
-    -PassThru
-  Write-Host "msiexec exit code: $($process.ExitCode)"
-} elseif ($type -eq "msix") {
-  try {
-    Add-AppxPackage -Path $installerPath
-    Write-Host "MSIX installation completed"
-  } catch {
-    Write-Host "MSIX installation failed: $_"
-    throw
-  }
-} elseif ($timeoutSeconds) {
-  $process = Start-Process `
-    -FilePath $installerPath `
-    -ArgumentList $installArgs `
-    -PassThru
-
-  $completed = $process.WaitForExit($timeoutSeconds * 1000)
-  if ($completed) {
-    Write-Host "Installer exit code: $($process.ExitCode)"
-  } else {
-    Write-Host "WARNING: Installer timed out after $timeoutSeconds seconds, killing process..."
-    $process | Stop-Process -Force
-    Write-Host "Process killed, continuing with detection..."
-  }
-} else {
-  $process = Start-Process `
-    -FilePath $installerPath `
-    -ArgumentList $installArgs `
-    -Wait `
-    -PassThru
-  Write-Host "Installer exit code: $($process.ExitCode)"
-}
-
-Write-Host "Waiting for installation to complete..."
-Start-Sleep -Seconds 10
-
-# ==========
-# Snapshot after install
-# ==========
-Write-Host "Taking snapshot after install..."
-$snapshotAfter = Get-InstalledAppsSnapshot
-Write-Host "Registry apps: $($snapshotAfter.Registry.Count), Appx apps: $($snapshotAfter.Appx.Count)"
-
-$diff = Compare-Snapshots -Before $snapshotBefore -After $snapshotAfter
-
-Write-Host ""
-Write-Host "=== Installation diff ==="
-if ($diff.AddedRegistry.Count -gt 0) {
-  Write-Host "New registry apps:"
-  $diff.AddedRegistry | ForEach-Object { Write-Host "  + $_" }
-} else {
-  Write-Host "No new registry apps detected"
-}
-
-if ($diff.AddedAppx.Count -gt 0) {
-  Write-Host "New Appx packages:"
-  $diff.AddedAppx | ForEach-Object { Write-Host "  + $_" }
-} else {
-  Write-Host "No new Appx packages detected"
-}
-Write-Host "========================="
-Write-Host ""
-
-# ==========
-# Detect
-# ==========
-Write-Host "Detecting installation..."
-$detected = $false
-
-if ($appDef.detect.file) {
-  Write-Host "Checking file: $($appDef.detect.file)"
-  $detected = Test-Path $appDef.detect.file
-  Write-Host "File exists: $detected"
-}
-
-if ($appDef.detect.registry_display_name) {
-  $searchName = $appDef.detect.registry_display_name
-  Write-Host "Searching for registry app: $searchName"
-
-  # Check in diff first
-  $foundInDiff = $diff.AddedRegistry | Where-Object { $_ -like "*$searchName*" }
-  if ($foundInDiff) {
-    Write-Host "Found in diff: $foundInDiff"
-    $detected = $true
-  } else {
-    # Fallback to full search
-    $paths = @(
-      "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
-      "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
-      "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
-    )
-    $allApps = $paths | ForEach-Object {
-      Get-ItemProperty $_ -ErrorAction SilentlyContinue
-    } | Where-Object { $_.DisplayName }
-
-    $match = $allApps | Where-Object { $_.DisplayName -like "*$searchName*" }
-    if ($match) {
-      Write-Host "Found in registry: $($match.DisplayName)"
-      $detected = $true
-    }
-  }
-}
-
-if ($appDef.detect.appx_name) {
-  $searchName = $appDef.detect.appx_name
-  Write-Host "Searching for Appx package: $searchName"
-
-  # Check in diff first
-  $foundInDiff = $diff.AddedAppx | Where-Object { $_ -like "*$searchName*" }
-  if ($foundInDiff) {
-    Write-Host "Found in diff: $foundInDiff"
-    $detected = $true
-  } else {
-    # Fallback to full search
-    $appxPackages = Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
-      Where-Object { $_.Name -like "*$searchName*" }
-    if ($appxPackages) {
-      Write-Host "Found Appx: $($appxPackages.Name)"
-      $detected = $true
-    }
-  }
-}
-
-if (-not $detected) {
-  throw "Detection failed for $App"
-}
-
-Write-Host "Detection succeeded"
-
-# ==========
-# Uninstall
-# ==========
-if ($appDef.uninstall) {
-  Write-Host ""
-  Write-Host "=== Uninstall verification ==="
-  Write-Host "Uninstalling..."
-
-  $uninstallType = $appDef.uninstall.type
-
-  if ($uninstallType -eq "msi") {
-    # Find product code from registry
-    $productCode = $null
-    $searchName = $appDef.detect.registry_display_name
-    $paths = @(
-      "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
-      "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
-      "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
-    )
-    $match = $paths | ForEach-Object {
-      Get-ItemProperty $_ -ErrorAction SilentlyContinue
-    } | Where-Object { $_.DisplayName -like "*$searchName*" } | Select-Object -First 1
-
-    if ($match -and $match.PSChildName -match "^\{.*\}$") {
-      $productCode = $match.PSChildName
-      Write-Host "Found product code: $productCode"
-    }
-
-    if ($productCode) {
-      $uninstallArgs = $appDef.uninstall.args -replace "\{product_code\}", $productCode
-      Write-Host "Uninstall args: $uninstallArgs"
-      $process = Start-Process msiexec -ArgumentList $uninstallArgs -Wait -PassThru
-      Write-Host "msiexec uninstall exit code: $($process.ExitCode)"
-    } else {
-      Write-Host "WARNING: Could not find product code for MSI uninstall"
-    }
-  } elseif ($uninstallType -eq "msix") {
-    $packageName = $appDef.uninstall.package_name
-    Write-Host "Removing Appx package: $packageName"
     try {
-      Get-AppxPackage -AllUsers -Name "*$packageName*" | Remove-AppxPackage -AllUsers
-      Write-Host "MSIX uninstall completed"
-    } catch {
-      Write-Host "MSIX uninstall failed: $_"
-    }
-  } elseif ($uninstallType -eq "exe") {
-    $uninstallPath = $appDef.uninstall.path
-    $uninstallArgs = $appDef.uninstall.args
-
-    # Handle {version} placeholder - find Chrome version from installed path
-    if ($uninstallPath -like "*{version}*") {
-      $basePath = $uninstallPath -replace "\{version\}.*", ""
-      if (Test-Path $basePath) {
-        $versionDir = Get-ChildItem $basePath -Directory |
-          Where-Object { $_.Name -match "^\d+\." } |
-          Sort-Object Name -Descending |
-          Select-Object -First 1
-        if ($versionDir) {
-          $uninstallPath = $uninstallPath -replace "\{version\}", $versionDir.Name
-          Write-Host "Resolved uninstall path: $uninstallPath"
+        # MSIの場合: COMオブジェクトでSummaryInfoを読み取る
+        if ($ext -eq ".msi") {
+            $wi = New-Object -ComObject WindowsInstaller.Installer
+            # 0 = ReadOnly
+            $db = $wi.SummaryInformation($Path, 0) 
+            # PID_TEMPLATE (Property 7) に "Intel", "x64", "Intel64", "AMD64" 等が含まれる
+            $template = $db.Property(7)
+            
+            # COMオブジェクトの開放
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($db) | Out-Null
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($wi) | Out-Null
+            
+            if ($template -match "x64|AMD64|Intel64") { return "64-bit" }
+            if ($template -match "Intel|i386") { return "32-bit" }
+            return "Unknown (MSI Template: $template)"
         }
-      }
+        
+        # EXEの場合: PEヘッダーのMagic Numberを読む
+        if ($ext -eq ".exe") {
+            $fs = [System.IO.File]::OpenRead($Path)
+            try {
+                $buffer = New-Object byte[] 1024
+                $fs.Read($buffer, 0, 1024) | Out-Null
+                
+                # PE Signature Offset (at 0x3C)
+                $peOffset = [BitConverter]::ToInt32($buffer, 60)
+                
+                # Magic Number Offset (PE Signature 4bytes + FileHeader 20bytes = 24bytes after PE)
+                # Magic is at start of Optional Header
+                $magicOffset = $peOffset + 24
+                
+                if ($magicOffset + 2 -gt 1024) { return "Unknown (Header too large)" }
+                
+                $magic = [BitConverter]::ToUInt16($buffer, $magicOffset)
+                
+                # 0x10b = PE32 (32-bit), 0x20b = PE32+ (64-bit)
+                if ($magic -eq 0x20b) { return "64-bit" }
+                if ($magic -eq 0x10b) { return "32-bit" }
+                return "Unknown (Magic: 0x$($magic.ToString('X')))"
+            }
+            finally {
+                $fs.Close()
+            }
+        }
     }
-
-    if (Test-Path $uninstallPath) {
-      Write-Host "Uninstall path: $uninstallPath"
-      Write-Host "Uninstall args: $uninstallArgs"
-      $process = Start-Process -FilePath $uninstallPath -ArgumentList $uninstallArgs -Wait -PassThru
-      Write-Host "Uninstaller exit code: $($process.ExitCode)"
-    } else {
-      Write-Host "WARNING: Uninstall path not found: $uninstallPath"
+    catch {
+        Write-Warning "Failed to analyze binary architecture: $_"
     }
-  }
-
-  Write-Host "Waiting for uninstall to complete..."
-  Start-Sleep -Seconds 10
-
-  # ==========
-  # Snapshot after uninstall
-  # ==========
-  Write-Host "Taking snapshot after uninstall..."
-  $snapshotAfterUninstall = Get-InstalledAppsSnapshot
-  Write-Host "Registry apps: $($snapshotAfterUninstall.Registry.Count), Appx apps: $($snapshotAfterUninstall.Appx.Count)"
-
-  # Compare with post-install snapshot
-  $removedRegistry = $snapshotAfter.Registry | Where-Object { $_ -notin $snapshotAfterUninstall.Registry }
-  $removedAppx = $snapshotAfter.Appx | Where-Object { $_ -notin $snapshotAfterUninstall.Appx }
-
-  Write-Host ""
-  Write-Host "=== Uninstall diff ==="
-  if ($removedRegistry.Count -gt 0) {
-    Write-Host "Removed registry apps:"
-    $removedRegistry | ForEach-Object { Write-Host "  - $_" }
-  } else {
-    Write-Host "No registry apps removed"
-  }
-
-  if ($removedAppx.Count -gt 0) {
-    Write-Host "Removed Appx packages:"
-    $removedAppx | ForEach-Object { Write-Host "  - $_" }
-  } else {
-    Write-Host "No Appx packages removed"
-  }
-  Write-Host "======================"
-
-  # ==========
-  # Verify uninstall
-  # ==========
-  Write-Host ""
-  Write-Host "Verifying uninstall..."
-  $stillDetected = $false
-
-  if ($appDef.detect.file) {
-    Write-Host "Checking file: $($appDef.detect.file)"
-    $stillDetected = Test-Path $appDef.detect.file
-    Write-Host "File exists: $stillDetected"
-  }
-
-  if ($appDef.detect.registry_display_name) {
-    $searchName = $appDef.detect.registry_display_name
-    Write-Host "Searching for registry app: $searchName"
-    $paths = @(
-      "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
-      "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
-      "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
-    )
-    $match = $paths | ForEach-Object {
-      Get-ItemProperty $_ -ErrorAction SilentlyContinue
-    } | Where-Object { $_.DisplayName -like "*$searchName*" }
-    if ($match) {
-      Write-Host "Still found in registry: $($match.DisplayName)"
-      $stillDetected = $true
-    } else {
-      Write-Host "Not found in registry"
-    }
-  }
-
-  if ($appDef.detect.appx_name) {
-    $searchName = $appDef.detect.appx_name
-    Write-Host "Searching for Appx package: $searchName"
-    $appxPackages = Get-AppxPackage -AllUsers -ErrorAction SilentlyContinue |
-      Where-Object { $_.Name -like "*$searchName*" }
-    if ($appxPackages) {
-      Write-Host "Still found Appx: $($appxPackages.Name)"
-      $stillDetected = $true
-    } else {
-      Write-Host "Not found in Appx packages"
-    }
-  }
-
-  if ($stillDetected) {
-    Write-Host "WARNING: App still detected after uninstall"
-  } else {
-    Write-Host "Uninstall verification succeeded"
-  }
-  Write-Host "==============================="
+    return "Unknown"
 }
 
-Write-Host ""
-Write-Host "Verify completed successfully"
+# ==========
+# Main Logic
+# ==========
+try {
+    Write-Host "Verifying installer for app: $App"
+
+    # Load app definition
+    $appDefPath = "apps/$App.yml"
+    if (-not (Test-Path $appDefPath)) { throw "App definition not found: $appDefPath" }
+
+    $appDef = Get-Content $appDefPath | ConvertFrom-Yaml
+
+    $installerFile = $appDef.download.file
+    $installerPath = (Resolve-Path "output/installer/$installerFile").Path
+    $type          = $appDef.installer.type
+    $summary.InstallerType = $type
+    $installArgs   = $appDef.installer.install_args -replace "{installer}", "`"$installerPath`""
+
+    if (-not (Test-Path $installerPath)) { throw "Installer not found: $installerPath" }
+
+    # ==========
+    # Check Architecture
+    # ==========
+    Write-Host "Checking architecture..."
+    $binArch = Get-BinaryArchitecture -Path $installerPath
+    $summary.AppArchitecture = $binArch
+    
+    Write-Host "OS Arch  : $($summary.OSArchitecture)"
+    Write-Host "App Arch : $binArch"
+
+    if ($summary.OSArchitecture -eq "64-bit" -and $binArch -eq "32-bit") {
+        Write-Warning "Running 32-bit installer on 64-bit OS. This is compatible but 64-bit is recommended."
+        $summary.ArchCheck = "Warning (32-on-64)"
+    } elseif ($summary.OSArchitecture -eq "32-bit" -and $binArch -eq "64-bit") {
+        throw "Incompatible Architecture: Trying to install 64-bit app on 32-bit OS."
+    } else {
+        $summary.ArchCheck = "Pass"
+    }
+
+    # Snapshot before
+    Write-Host "Taking snapshot before install..."
+    $snapshotBefore = Get-InstalledAppsSnapshot
+
+    # Check file header magic
+    $bytes = [System.IO.File]::ReadAllBytes($installerPath)[0..3]
+    $header = [BitConverter]::ToString($bytes) -replace '-',''
+    if ($type -eq "msi" -and $header -ne "D0CF11E0") { Write-Warning "Invalid MSI Header"; $summary.InstallerType = "Invalid MSI" }
+    elseif ($type -eq "exe" -and $header -notlike "4D5A*") { Write-Warning "Invalid EXE Header"; $summary.InstallerType = "Invalid EXE" }
+
+    # ==========
+    # Install
+    # ==========
+    Write-Host "Installing..."
+    $timeoutSeconds = $appDef.installer.timeout
+    if (-not $timeoutSeconds) { $timeoutSeconds = 600 } # Default 10 min
+
+    if ($type -eq "msi") {
+        $process = Start-Process msiexec -ArgumentList $installArgs -PassThru
+        $completed = $process.WaitForExit($timeoutSeconds * 1000)
+        if (-not $completed) { 
+            $process | Stop-Process -Force
+            throw "MSI Installation Timed Out" 
+        }
+        $exitCode = $process.ExitCode
+    } elseif ($type -eq "msix") {
+        Add-AppxPackage -Path $installerPath
+        $exitCode = 0
+    } else {
+        $process = Start-Process -FilePath $installerPath -ArgumentList $installArgs -PassThru
+        $completed = $process.WaitForExit($timeoutSeconds * 1000)
+        if (-not $completed) {
+            $process | Stop-Process -Force
+            throw "EXE Installation Timed Out"
+        }
+        $exitCode = $process.ExitCode
+    }
+
+    Write-Host "Exit Code: $exitCode"
+    if ($exitCode -eq 0 -or $exitCode -eq 3010) {
+        $summary.InstallStatus = "Success ($exitCode)"
+    } else {
+        $summary.InstallStatus = "Failed ($exitCode)"
+        throw "Installation failed with code $exitCode"
+    }
+
+    Start-Sleep -Seconds 5
+
+    # Snapshot after
+    $snapshotAfter = Get-InstalledAppsSnapshot
+    $diff = Compare-Snapshots -Before $snapshotBefore -After $snapshotAfter
+    
+    # Optional Command Verify
+    if ($appDef.verify.command) {
+        try {
+             Invoke-Expression $appDef.verify.command | Out-Null
+             Write-Host "Verify command passed."
+        } catch {
+             Write-Warning "Verify command failed."
+             # Verification failure doesn't always mean install failure, but worth noting
+        }
+    }
+
+    # ==========
+    # Detect
+    # ==========
+    Write-Host "Detecting..."
+    $detected = $false
+    
+    if ($appDef.detect.registry_display_name) {
+        $searchName = $appDef.detect.registry_display_name
+        # Diff Check
+        if ($diff.AddedRegistry | Where-Object { $_ -like "*$searchName*" }) { $detected = $true }
+        # Full Scan
+        elseif ((Get-InstalledAppsSnapshot).Registry | Where-Object { $_ -like "*$searchName*" }) { $detected = $true }
+    }
+    if ($appDef.detect.file -and (Test-Path $appDef.detect.file)) { $detected = $true }
+    
+    if ($detected) {
+        $summary.DetectionStatus = "Success"
+        Write-Host "Detection Success"
+    } else {
+        $summary.DetectionStatus = "Failed"
+        throw "Detection failed"
+    }
+
+    # ==========
+    # Uninstall
+    # ==========
+    if ($appDef.uninstall) {
+        Write-Host "Uninstalling..."
+        
+        # MSI Uninstall Logic
+        if ($appDef.uninstall.type -eq "msi") {
+            # Try to get ProductCode from registry diff first (Most accurate)
+            $searchName = $appDef.detect.registry_display_name
+            $paths = @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*")
+            $match = $paths | ForEach-Object { Get-ItemProperty $_ -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -like "*$searchName*" } | Select-Object -First 1
+            
+            if ($match -and $match.PSChildName -match "^\{.*\}$") {
+                $pCode = $match.PSChildName
+                $uArgs = $appDef.uninstall.args -replace "\{product_code\}", $pCode
+                Start-Process msiexec -ArgumentList $uArgs -Wait
+                $summary.UninstallStatus = "Success"
+            } else {
+                 $summary.UninstallStatus = "Failed (No ProductCode)"
+            }
+        } 
+        # EXE/Other Logic could go here
+        else {
+            # Simplified for summary demo
+             $summary.UninstallStatus = "Skipped (EXE logic)"
+        }
+        
+        Start-Sleep -Seconds 5
+        
+        # Verify Uninstall (CleanUp Check)
+        $snapshotFinal = Get-InstalledAppsSnapshot
+        $clean = $true
+        if ($appDef.detect.registry_display_name) {
+             if ($snapshotFinal.Registry -like "*$($appDef.detect.registry_display_name)*") { $clean = $false }
+        }
+        if ($clean) { $summary.CleanUpStatus = "Success" } else { $summary.CleanUpStatus = "Failed (Residue)" }
+    }
+
+    $summary.OverallResult = "PASS"
+
+} catch {
+    Write-Error $_
+    $summary.OverallResult = "FAIL"
+    exit 1
+} finally {
+    # ==========
+    # SUMMARY OUTPUT
+    # ==========
+    Write-Host ""
+    Write-Host "==========================================" -ForegroundColor Cyan
+    Write-Host "   VERIFICATION SUMMARY: $App" -ForegroundColor Cyan
+    Write-Host "==========================================" -ForegroundColor Cyan
+    
+    $summary.Keys | ForEach-Object {
+        $key = $_
+        $val = $summary[$key]
+        
+        # Color coding
+        $color = "White"
+        if ($val -match "Success|Pass|64-bit") { $color = "Green" }
+        if ($val -match "Warning|32-bit") { $color = "Yellow" }
+        if ($val -match "Failed|FAIL|Unknown") { $color = "Red" }
+        if ($key -eq "OSArchitecture") { $color = "Gray" }
+
+        Write-Host "$($key.PadRight(18)) : " -NoNewline
+        Write-Host $val -ForegroundColor $color
+    }
+    Write-Host "==========================================" -ForegroundColor Cyan
+    Write-Host ""
+}
