@@ -1,15 +1,16 @@
 name: slack
 
 download:
-  url: https://slack.com/api/desktop.latestRelease?arch=x64&variant=msix&redirect=true
-  file: slack.msix
+  url: https://slack.com/ssb/download-win64
+  file: slack-x64.msi
 
 installer:
-  type: msix
+  type: msi
+  install_args: "/i {installer} /qn /norestart"
 
 detect:
-  appx_name: "Slack"
+  file: "C:\\Program Files\\Slack\\slack.exe"
 
 uninstall:
-  type: msix
-  package_name: "Slack"
+  type: msi
+  args: "/x {product_code} /qn"

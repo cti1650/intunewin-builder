@@ -1,17 +1,16 @@
 name: chrome
 
 download:
-  url: https://dl.google.com/chrome/install/latest/chrome_installer.exe
-  file: chrome.exe
+  url: https://dl.google.com/chrome/install/googlechromestandaloneenterprise64.msi
+  file: googlechromestandaloneenterprise64.msi
 
 installer:
-  type: exe
-  install_args: "/silent /install"
+  type: msi
+  install_args: "/i {installer} /qn /norestart"
 
 detect:
   file: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
 
 uninstall:
-  type: exe
-  path: "C:\\Program Files\\Google\\Chrome\\Application\\{version}\\Installer\\setup.exe"
-  args: "--uninstall --multi-install --chrome --system-level --force-uninstall"
+  type: msi
+  args: "/x {product_code} /qn"

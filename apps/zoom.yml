@@ -1,7 +1,7 @@
 name: zoom
 
 download:
-  url: https://zoom.us/client/latest/ZoomInstallerFull.msi
+  url: "https://zoom.us/client/latest/ZoomInstallerFull.msi?archType=x64"
   file: ZoomInstallerFull.msi
 
 installer:
