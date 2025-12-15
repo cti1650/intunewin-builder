@@ -251,11 +251,29 @@ try {
         
         # Verify Cleanup
         $clean = $true
+        
+        # 1. レジストリの残骸チェック
         if ($appDef.detect.registry_display_name) {
-             if ((Get-InstalledAppsSnapshot).Registry -like "*$($appDef.detect.registry_display_name)*") { $clean = $false }
+             if ((Get-InstalledAppsSnapshot).Registry -like "*$($appDef.detect.registry_display_name)*") { 
+                 Write-Host "Cleanup Check Failed: Registry entry still exists"
+                 $clean = $false 
+             }
         }
+        
+        # 2. Appxの残骸チェック
         if ($appDef.detect.appx_name) {
-             if ((Get-InstalledAppsSnapshot).Appx -like "*$($appDef.detect.appx_name)*") { $clean = $false }
+             if ((Get-InstalledAppsSnapshot).Appx -like "*$($appDef.detect.appx_name)*") { 
+                 Write-Host "Cleanup Check Failed: Appx package still exists"
+                 $clean = $false 
+             }
+        }
+        
+        # 3. ファイルの残骸チェック
+        if ($appDef.detect.file) {
+             if (Test-Path $appDef.detect.file) {
+                 Write-Host "Cleanup Check Failed: File still exists at $($appDef.detect.file)"
+                 $clean = $false
+             }
         }
         
         if ($clean) { $summary.CleanUpStatus = "Success" } else { $summary.CleanUpStatus = "Failed (Residue)" }

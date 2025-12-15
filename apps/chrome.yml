@@ -10,6 +10,7 @@ installer:
 
 detect:
   file: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+  registry_display_name: "Google Chrome"
 
 uninstall:
   type: msi

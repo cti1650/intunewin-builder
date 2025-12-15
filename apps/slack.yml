@@ -10,6 +10,7 @@ installer:
 
 detect:
   file: "C:\\Program Files\\Slack\\slack.exe"
+  registry_display_name: "Slack"
 
 uninstall:
   type: msi
