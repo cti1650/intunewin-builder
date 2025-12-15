@@ -15,7 +15,7 @@ installer:
 
 detect:
   file: "C:\\Program Files\\Slack\\slack.exe"
-  version: ""
+  version: "4.47.69.0"
   registry_display_name: "Slack"
 
 uninstall:
