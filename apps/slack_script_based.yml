@@ -1,0 +1,25 @@
+name: slack_script_based
+
+# スクリプトベース配布: 端末側で最新インストーラーをダウンロード・実行
+script_based: true
+
+download:
+  # 端末側でダウンロードするURL
+  url: https://slack.com/ssb/download-win64-msi
+
+installer:
+  type: script
+  # Intuneでのインストールコマンド例:
+  # powershell.exe -ExecutionPolicy Bypass -File generic-install.ps1 -Url "https://slack.com/ssb/download-win64-msi" -Args "ALLUSERS=1"
+  install_args: "ALLUSERS=1"
+
+detect:
+  file: "C:\\Program Files\\Slack\\slack.exe"
+  version: ""
+  registry_display_name: "Slack"
+
+uninstall:
+  type: script
+  # Intuneでのアンインストールコマンド例:
+  # powershell.exe -ExecutionPolicy Bypass -File generic-install.ps1 -Uninstall -RegistryName "Slack"
+  registry_name: "Slack"

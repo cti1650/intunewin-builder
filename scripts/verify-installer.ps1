@@ -109,75 +109,102 @@ try {
     if (-not (Test-Path $appDefPath)) { throw "App definition not found: $appDefPath" }
     $appDef = Get-Content $appDefPath | ConvertFrom-Yaml
 
-    $installerFile = $appDef.download.file
-    $installerPath = (Resolve-Path "output/installer/$installerFile").Path
-    $type          = $appDef.installer.type
-    $summary.InstallerType = $type
-    $installArgs   = $appDef.installer.install_args -replace "{installer}", "`"$installerPath`""
-
-    if (-not (Test-Path $installerPath)) { throw "Installer not found: $installerPath" }
-
-    # ==========
-    # Check Architecture
-    # ==========
-    Write-Host "Checking architecture..."
-    $binArch = Get-BinaryArchitecture -Path $installerPath
-    $summary.AppArchitecture = $binArch
-    
-    Write-Host "OS Arch  : $($summary.OSArchitecture)"
-    Write-Host "App Arch : $binArch"
-
-    # MSIXの場合はアーキテクチャ不一致チェックをスキップ（コンテナのため）
-    if ($binArch -ne "MSIX (Container)") {
-        if ($summary.OSArchitecture -eq "64-bit" -and $binArch -eq "32-bit") {
-            Write-Warning "Running 32-bit installer on 64-bit OS."
-            $summary.ArchCheck = "Warning (32-on-64)"
-        } elseif ($summary.OSArchitecture -eq "32-bit" -and $binArch -eq "64-bit") {
-            throw "Incompatible Architecture: Trying to install 64-bit app on 32-bit OS."
-        } else {
-            $summary.ArchCheck = "Pass"
-        }
-    } else {
-        $summary.ArchCheck = "Skipped (MSIX)"
-    }
+    $isScriptBased = $appDef.script_based -eq $true
+    $type = $appDef.installer.type
+    $summary.InstallerType = if ($isScriptBased) { "script" } else { $type }
 
     # Snapshot before
     $snapshotBefore = Get-InstalledAppsSnapshot
 
-    # Check file header magic
-    $bytes = [System.IO.File]::ReadAllBytes($installerPath)[0..3]
-    $header = [BitConverter]::ToString($bytes) -replace '-',''
-    if ($type -eq "msi" -and $header -ne "D0CF11E0") { Write-Warning "Invalid MSI Header"; $summary.InstallerType = "Invalid MSI" }
-    elseif ($type -eq "exe" -and $header -notlike "4D5A*") { Write-Warning "Invalid EXE Header"; $summary.InstallerType = "Invalid EXE" }
-    # ★ MSIXのZipヘッダーチェックを復活
-    elseif ($type -eq "msix" -and $header -ne "504B0304") { Write-Warning "Invalid MSIX Header"; $summary.InstallerType = "Invalid MSIX" }
+    if ($isScriptBased) {
+        # ==========
+        # Script-based Install
+        # ==========
+        Write-Host "Mode: Script-based deployment"
+        $summary.AppArchitecture = "N/A (Script)"
+        $summary.ArchCheck = "Skipped (Script)"
 
-    # ==========
-    # Install
-    # ==========
-    Write-Host "Installing..."
-    $timeoutSeconds = $appDef.installer.timeout
-    if (-not $timeoutSeconds) { $timeoutSeconds = 600 }
+        $url = $appDef.download.url
+        $installArgs = $appDef.installer.install_args
 
-    if ($type -eq "msi") {
-        $process = Start-Process msiexec -ArgumentList $installArgs -PassThru
-        if (-not $process.WaitForExit($timeoutSeconds * 1000)) { $process | Stop-Process -Force; throw "MSI Installation Timed Out" }
-        $exitCode = $process.ExitCode
-    } elseif ($type -eq "msix") {
-        # ★ MSIXインストール処理を復活
-        try {
-            Add-AppxPackage -Path $installerPath -ErrorAction Stop
-            $exitCode = 0
-            Write-Host "MSIX installation completed"
-        } catch {
-            $exitCode = 1
-            Write-Host "MSIX installation failed: $_"
-            throw
+        Write-Host "Installing via generic-install.ps1..."
+        Write-Host "  URL: $url"
+        Write-Host "  Args: $installArgs"
+
+        if ($installArgs) {
+            & scripts/generic-install.ps1 -Url $url -Args $installArgs
+        } else {
+            & scripts/generic-install.ps1 -Url $url
         }
+        $exitCode = $LASTEXITCODE
+
     } else {
-        $process = Start-Process -FilePath $installerPath -ArgumentList $installArgs -PassThru
-        if (-not $process.WaitForExit($timeoutSeconds * 1000)) { $process | Stop-Process -Force; throw "EXE Installation Timed Out" }
-        $exitCode = $process.ExitCode
+        # ==========
+        # Traditional Install (MSI/EXE/MSIX)
+        # ==========
+        $installerFile = $appDef.download.file
+        $installerPath = (Resolve-Path "output/installer/$installerFile").Path
+        $installArgs   = $appDef.installer.install_args -replace "{installer}", "`"$installerPath`""
+
+        if (-not (Test-Path $installerPath)) { throw "Installer not found: $installerPath" }
+
+        # ==========
+        # Check Architecture
+        # ==========
+        Write-Host "Checking architecture..."
+        $binArch = Get-BinaryArchitecture -Path $installerPath
+        $summary.AppArchitecture = $binArch
+
+        Write-Host "OS Arch  : $($summary.OSArchitecture)"
+        Write-Host "App Arch : $binArch"
+
+        # MSIXの場合はアーキテクチャ不一致チェックをスキップ（コンテナのため）
+        if ($binArch -ne "MSIX (Container)") {
+            if ($summary.OSArchitecture -eq "64-bit" -and $binArch -eq "32-bit") {
+                Write-Warning "Running 32-bit installer on 64-bit OS."
+                $summary.ArchCheck = "Warning (32-on-64)"
+            } elseif ($summary.OSArchitecture -eq "32-bit" -and $binArch -eq "64-bit") {
+                throw "Incompatible Architecture: Trying to install 64-bit app on 32-bit OS."
+            } else {
+                $summary.ArchCheck = "Pass"
+            }
+        } else {
+            $summary.ArchCheck = "Skipped (MSIX)"
+        }
+
+        # Check file header magic
+        $bytes = [System.IO.File]::ReadAllBytes($installerPath)[0..3]
+        $header = [BitConverter]::ToString($bytes) -replace '-',''
+        if ($type -eq "msi" -and $header -ne "D0CF11E0") { Write-Warning "Invalid MSI Header"; $summary.InstallerType = "Invalid MSI" }
+        elseif ($type -eq "exe" -and $header -notlike "4D5A*") { Write-Warning "Invalid EXE Header"; $summary.InstallerType = "Invalid EXE" }
+        elseif ($type -eq "msix" -and $header -ne "504B0304") { Write-Warning "Invalid MSIX Header"; $summary.InstallerType = "Invalid MSIX" }
+
+        # ==========
+        # Install
+        # ==========
+        Write-Host "Installing..."
+        $timeoutSeconds = $appDef.installer.timeout
+        if (-not $timeoutSeconds) { $timeoutSeconds = 600 }
+
+        if ($type -eq "msi") {
+            $process = Start-Process msiexec -ArgumentList $installArgs -PassThru
+            if (-not $process.WaitForExit($timeoutSeconds * 1000)) { $process | Stop-Process -Force; throw "MSI Installation Timed Out" }
+            $exitCode = $process.ExitCode
+        } elseif ($type -eq "msix") {
+            try {
+                Add-AppxPackage -Path $installerPath -ErrorAction Stop
+                $exitCode = 0
+                Write-Host "MSIX installation completed"
+            } catch {
+                $exitCode = 1
+                Write-Host "MSIX installation failed: $_"
+                throw
+            }
+        } else {
+            $process = Start-Process -FilePath $installerPath -ArgumentList $installArgs -PassThru
+            if (-not $process.WaitForExit($timeoutSeconds * 1000)) { $process | Stop-Process -Force; throw "EXE Installation Timed Out" }
+            $exitCode = $process.ExitCode
+        }
     }
 
     if ($exitCode -eq 0 -or $exitCode -eq 3010) {
@@ -289,8 +316,20 @@ try {
     if ($appDef.uninstall) {
         Write-Host "Uninstalling..."
         $unType = $appDef.uninstall.type
-        
-        if ($unType -eq "msi") {
+
+        if ($unType -eq "script") {
+            # Script-based uninstall
+            $registryName = $appDef.uninstall.registry_name
+            if (-not $registryName) { $registryName = $appDef.detect.registry_display_name }
+            Write-Host "Uninstalling via generic-install.ps1..."
+            Write-Host "  RegistryName: $registryName"
+            & scripts/generic-install.ps1 -Uninstall -RegistryName $registryName
+            if ($LASTEXITCODE -eq 0) {
+                $summary.UninstallStatus = "Success"
+            } else {
+                $summary.UninstallStatus = "Failed ($LASTEXITCODE)"
+            }
+        } elseif ($unType -eq "msi") {
             $searchName = $appDef.detect.registry_display_name
             $paths = @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*")
             $match = $paths | ForEach-Object { Get-ItemProperty $_ -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -like "*$searchName*" } | Select-Object -First 1
@@ -301,7 +340,6 @@ try {
                 $summary.UninstallStatus = "Success"
             } else { $summary.UninstallStatus = "Failed (No ProductCode)" }
         } elseif ($unType -eq "msix") {
-            # ★ MSIXアンインストール処理を復活
             $pkgName = $appDef.uninstall.package_name
             try {
                 Get-AppxPackage -AllUsers -Name "*$pkgName*" | Remove-AppxPackage -AllUsers -ErrorAction Stop
@@ -312,7 +350,6 @@ try {
                 Write-Warning "MSIX uninstall failed: $_"
             }
         } elseif ($unType -eq "exe") {
-             # EXE用の簡易ロジック（実際はYAMLのpath等を使う）
              $summary.UninstallStatus = "Skipped (EXE logic)"
         }
         
