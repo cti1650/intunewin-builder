@@ -1,0 +1,32 @@
+name: build-and-verify-intunewin-apps
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '0 0 * * *'
+
+jobs:
+  discover-apps:
+    runs-on: ubuntu-latest
+    outputs:
+      app_matrix: ${{ steps.set-matrix.outputs.app_matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Discover app definitions
+        id: set-matrix
+        shell: pwsh
+        run: |
+          $apps = Get-ChildItem -Path "apps" -Filter "*.yml" | Select-Object -ExpandProperty BaseName
+          $json = ConvertTo-Json -Compress @($apps)
+          "app_matrix=$json" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+  run-matrix:
+    needs: discover-apps
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJson(needs.discover-apps.outputs.app_matrix) }}
+    
+    uses: ./.github/workflows/_core-build.yml
+    with:
+      app: ${{ matrix.app }}

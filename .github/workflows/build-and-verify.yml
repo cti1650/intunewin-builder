@@ -15,31 +15,7 @@ on:
 
 jobs:
   build_and_verify:
-    runs-on: windows-latest
-    timeout-minutes: 20
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install powershell-yaml
-        shell: pwsh
-        run: |
-          Install-Module powershell-yaml -Scope CurrentUser -Force
-
-      - name: Build intunewin
-        uses: ./.github/actions/build-intunewin
-        with:
-          app: ${{ inputs.app }}
-
-      - name: Verify installer (no Intune)
-        uses: ./.github/actions/verify-installer
-        with:
-          app: ${{ inputs.app }}
-        timeout-minutes: 5
-
-      - name: Upload artifact
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: intunewin-${{ inputs.app }}
-          path: output/
+    # 共通ロジックを呼び出す
+    uses: ./.github/workflows/_core-build.yml
+    with:
+      app: ${{ inputs.app }}
