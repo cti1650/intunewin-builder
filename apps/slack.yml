@@ -1,7 +1,7 @@
 name: slack
 
 download:
-  url: https://slack.com/ssb/download-win64
+  url: https://slack.com/ssb/download-win64-msi
   file: slack-x64.msi
 
 installer:
