@@ -199,58 +199,89 @@ try {
     }
 
     # ==========
-    # Detect
+    # Detect (AND条件: 指定された全ての条件がマッチする必要がある)
     # ==========
     Write-Host "Detecting..."
-    $detected = $false
+    $detectionResults = @{}
+
+    # レジストリ検出
     if ($appDef.detect.registry_display_name) {
         $searchName = $appDef.detect.registry_display_name
-        if ($diff.AddedRegistry | Where-Object { $_ -like "*$searchName*" }) { $detected = $true }
-        elseif ((Get-InstalledAppsSnapshot).Registry | Where-Object { $_ -like "*$searchName*" }) { $detected = $true }
-        # DisplayNameをサマリーに設定
         $summary.DisplayName = $searchName
+        $registryMatch = $false
+        if ($diff.AddedRegistry | Where-Object { $_ -like "*$searchName*" }) { $registryMatch = $true }
+        elseif ((Get-InstalledAppsSnapshot).Registry | Where-Object { $_ -like "*$searchName*" }) { $registryMatch = $true }
+        $detectionResults["Registry"] = $registryMatch
+        if ($registryMatch) { Write-Host "Registry detection: Pass" }
+        else { Write-Warning "Registry detection: Failed (not found: $searchName)" }
     }
+
+    # Appx検出
     if ($appDef.detect.appx_name) {
         $searchName = $appDef.detect.appx_name
-        if ($diff.AddedAppx | Where-Object { $_ -like "*$searchName*" }) { $detected = $true }
-        elseif ((Get-InstalledAppsSnapshot).Appx | Where-Object { $_ -like "*$searchName*" }) { $detected = $true }
+        $appxMatch = $false
+        if ($diff.AddedAppx | Where-Object { $_ -like "*$searchName*" }) { $appxMatch = $true }
+        elseif ((Get-InstalledAppsSnapshot).Appx | Where-Object { $_ -like "*$searchName*" }) { $appxMatch = $true }
+        $detectionResults["Appx"] = $appxMatch
+        if ($appxMatch) { Write-Host "Appx detection: Pass" }
+        else { Write-Warning "Appx detection: Failed (not found: $searchName)" }
     }
-    if ($appDef.detect.file -and (Test-Path $appDef.detect.file)) {
-        $detected = $true
+
+    # ファイル検出
+    if ($appDef.detect.file) {
         $summary.InstallPath = $appDef.detect.file
+        if (Test-Path $appDef.detect.file) {
+            $detectionResults["File"] = $true
+            Write-Host "File detection: Pass"
 
-        # バージョン取得
-        $fileInfo = Get-Item $appDef.detect.file
-        $installedVersion = $fileInfo.VersionInfo.FileVersion
-        if ($installedVersion) {
-            $summary.InstalledVersion = $installedVersion
-        }
+            # バージョン取得
+            $fileInfo = Get-Item $appDef.detect.file
+            $installedVersion = $fileInfo.VersionInfo.FileVersion
+            if ($installedVersion) {
+                $summary.InstalledVersion = $installedVersion
+            }
 
-        # バージョンチェック（指定されている場合のみ）
-        if ($appDef.detect.version) {
-            $requiredVersion = $appDef.detect.version
-            Write-Host "Installed Version: $installedVersion"
-            Write-Host "Required Version : $requiredVersion"
-            try {
-                if ([version]$installedVersion -ge [version]$requiredVersion) {
-                    Write-Host "Version check passed (>= required)"
-                    $summary.VersionCheck = "Pass ($installedVersion >= $requiredVersion)"
-                } else {
-                    Write-Warning "Version check failed: installed version is lower than required"
-                    $summary.VersionCheck = "Failed ($installedVersion < $requiredVersion)"
-                    $detected = $false
+            # バージョンチェック（指定されている場合のみ）
+            if ($appDef.detect.version) {
+                $requiredVersion = $appDef.detect.version
+                Write-Host "Installed Version: $installedVersion"
+                Write-Host "Required Version : $requiredVersion"
+                try {
+                    if ([version]$installedVersion -ge [version]$requiredVersion) {
+                        Write-Host "Version check: Pass"
+                        $summary.VersionCheck = "Pass ($installedVersion >= $requiredVersion)"
+                        $detectionResults["Version"] = $true
+                    } else {
+                        Write-Warning "Version check: Failed ($installedVersion < $requiredVersion)"
+                        $summary.VersionCheck = "Failed ($installedVersion < $requiredVersion)"
+                        $detectionResults["Version"] = $false
+                    }
+                } catch {
+                    Write-Warning "Version check: Error (Parse failed)"
+                    $summary.VersionCheck = "Error (Parse failed)"
+                    $detectionResults["Version"] = $false
                 }
-            } catch {
-                Write-Warning "Could not compare versions: $_"
-                $summary.VersionCheck = "Error (Parse failed)"
+            } else {
+                $summary.VersionCheck = "Not Required"
             }
         } else {
-            $summary.VersionCheck = "Not Required"
+            Write-Warning "File detection: Failed (not found: $($appDef.detect.file))"
+            $detectionResults["File"] = $false
+            $summary.VersionCheck = "Skipped (File not found)"
         }
     }
-    
-    if ($detected) { $summary.DetectionStatus = "Success"; Write-Host "Detection Success" }
-    else { $summary.DetectionStatus = "Failed"; throw "Detection failed" }
+
+    # 全ての条件がマッチしたか確認
+    $allPassed = ($detectionResults.Count -gt 0) -and ($detectionResults.Values | Where-Object { $_ -eq $false }).Count -eq 0
+
+    if ($allPassed) {
+        $summary.DetectionStatus = "Success"
+        Write-Host "Detection Success (all $($detectionResults.Count) checks passed)"
+    } else {
+        $failedChecks = ($detectionResults.GetEnumerator() | Where-Object { $_.Value -eq $false } | ForEach-Object { $_.Key }) -join ", "
+        $summary.DetectionStatus = "Failed ($failedChecks)"
+        throw "Detection failed: $failedChecks"
+    }
 
     # ==========
     # Uninstall
