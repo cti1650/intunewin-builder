@@ -17,6 +17,7 @@ $summary = [ordered]@{
     InstallerType     = "Unknown"
     InstallStatus     = "Skipped"
     DetectionStatus   = "Skipped"
+    VersionCheck      = "Skipped"
     UninstallStatus   = "Skipped"
     CleanUpStatus     = "Skipped"
     OverallResult     = "Failed"
@@ -209,7 +210,31 @@ try {
         if ($diff.AddedAppx | Where-Object { $_ -like "*$searchName*" }) { $detected = $true }
         elseif ((Get-InstalledAppsSnapshot).Appx | Where-Object { $_ -like "*$searchName*" }) { $detected = $true }
     }
-    if ($appDef.detect.file -and (Test-Path $appDef.detect.file)) { $detected = $true }
+    if ($appDef.detect.file -and (Test-Path $appDef.detect.file)) {
+        $detected = $true
+        # バージョンチェック（指定されている場合のみ）
+        if ($appDef.detect.version) {
+            $installedVersion = (Get-Item $appDef.detect.file).VersionInfo.FileVersion
+            $requiredVersion = $appDef.detect.version
+            Write-Host "Installed Version: $installedVersion"
+            Write-Host "Required Version : $requiredVersion"
+            try {
+                if ([version]$installedVersion -ge [version]$requiredVersion) {
+                    Write-Host "Version check passed (>= required)"
+                    $summary.VersionCheck = "Pass ($installedVersion >= $requiredVersion)"
+                } else {
+                    Write-Warning "Version check failed: installed version is lower than required"
+                    $summary.VersionCheck = "Failed ($installedVersion < $requiredVersion)"
+                    $detected = $false
+                }
+            } catch {
+                Write-Warning "Could not compare versions: $_"
+                $summary.VersionCheck = "Error (Parse failed)"
+            }
+        } else {
+            $summary.VersionCheck = "Not Required"
+        }
+    }
     
     if ($detected) { $summary.DetectionStatus = "Success"; Write-Host "Detection Success" }
     else { $summary.DetectionStatus = "Failed"; throw "Detection failed" }

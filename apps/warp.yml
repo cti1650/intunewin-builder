@@ -6,9 +6,11 @@ download:
 
 installer:
   type: msi
-  install_args: "/i {installer} /qn"
+  install_args: "/i {installer} /qn /norestart"
 
 detect:
+  file: "C:\\Program Files\\Cloudflare\\Cloudflare WARP\\Cloudflare WARP.exe"
+  version: ""
   registry_display_name: "Cloudflare WARP"
 
 uninstall:

@@ -6,10 +6,11 @@ download:
 
 installer:
   type: msi
-  install_args: "/i {installer} /qn /norestart"
+  install_args: "/i {installer} /qn /norestart ALLUSERS=1"
 
 detect:
   file: "C:\\Program Files\\Slack\\slack.exe"
+  version: ""
   registry_display_name: "Slack"
 
 uninstall:

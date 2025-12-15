@@ -6,9 +6,11 @@ download:
 
 installer:
   type: msi
-  install_args: "/i {installer} /qn ZoomAutoUpdate=\"true\""
+  install_args: "/i {installer} /qn /norestart ZoomAutoUpdate=\"true\""
 
 detect:
+  file: "C:\\Program Files\\Zoom\\bin\\Zoom.exe"
+  version: ""
   registry_display_name: "Zoom Workplace"
 
 uninstall:
