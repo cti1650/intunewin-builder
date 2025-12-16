@@ -10,9 +10,12 @@ on:
 
 jobs:
   run-logic:
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [windows-latest, windows-11-arm]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
-    
+
     steps:
       - uses: actions/checkout@v4
 
@@ -37,5 +40,5 @@ jobs:
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
-          name: intunewin-${{ inputs.app }}
+          name: intunewin-${{ inputs.app }}-${{ matrix.os }}
           path: output/
