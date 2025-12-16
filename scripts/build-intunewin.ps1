@@ -69,11 +69,52 @@ if ($extension -eq ".msi" -and $header -ne "D0CF11E0") {
 # ==========
 $file        = Get-Item "app/$setup"
 $hash        = Get-FileHash "app/$setup" -Algorithm SHA256
-$version     = $file.VersionInfo.FileVersion
+$downloadUtc = (Get-Date).ToUniversalTime().ToString("o")
+
+# Get version based on file type
+$version = "unknown"
+switch ($extension) {
+  ".exe" {
+    $version = $file.VersionInfo.FileVersion
+  }
+  ".msi" {
+    try {
+      $msi = New-Object -ComObject WindowsInstaller.Installer
+      $db = $msi.GetType().InvokeMember("OpenDatabase", "InvokeMethod", $null, $msi, @($file.FullName, 0))
+      $view = $db.GetType().InvokeMember("OpenView", "InvokeMethod", $null, $db, "SELECT Value FROM Property WHERE Property='ProductVersion'")
+      $view.GetType().InvokeMember("Execute", "InvokeMethod", $null, $view, $null)
+      $record = $view.GetType().InvokeMember("Fetch", "InvokeMethod", $null, $view, $null)
+      if ($record) {
+        $version = $record.GetType().InvokeMember("StringData", "GetProperty", $null, $record, 1)
+      }
+      [System.Runtime.Interopservices.Marshal]::ReleaseComObject($msi) | Out-Null
+    } catch {
+      Write-Host "WARNING: Could not read MSI version: $_"
+    }
+  }
+  ".msix" {
+    try {
+      # MSIX is ZIP-based, read AppxManifest.xml
+      Add-Type -AssemblyName System.IO.Compression.FileSystem
+      $zip = [System.IO.Compression.ZipFile]::OpenRead($file.FullName)
+      $manifest = $zip.Entries | Where-Object { $_.Name -eq "AppxManifest.xml" } | Select-Object -First 1
+      if ($manifest) {
+        $reader = New-Object System.IO.StreamReader($manifest.Open())
+        $xml = [xml]$reader.ReadToEnd()
+        $reader.Close()
+        $version = $xml.Package.Identity.Version
+      }
+      $zip.Dispose()
+    } catch {
+      Write-Host "WARNING: Could not read MSIX version: $_"
+    }
+  }
+}
+
 if (-not $version) {
   $version = "unknown"
 }
-$downloadUtc = (Get-Date).ToUniversalTime().ToString("o")
+Write-Host "Detected version: $version"
 
 # ==========
 # Download IntuneWinAppUtil
