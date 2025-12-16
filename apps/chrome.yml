@@ -10,7 +10,9 @@ installer:
 
 detect:
   file: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
-  version: "143.0.7499.110"
+  # x64版では143.0.7499.110が最新バージョン（2025年12月時点）
+  # ARM64版では141.0.7390.108が最新バージョン（2025年12月時点）
+  version: "141.0.7390.108"
   registry_display_name: "Google Chrome"
 
 uninstall:
