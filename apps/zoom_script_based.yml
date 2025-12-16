@@ -7,7 +7,7 @@ download:
 
 installer:
   type: script
-  install_args: "ZoomAutoUpdate=\"true\""
+  install_args: "ZoomAutoUpdate=true"
 
 detect:
   file: "C:\\Program Files\\Zoom\\bin\\Zoom.exe"

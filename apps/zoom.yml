@@ -6,7 +6,7 @@ download:
 
 installer:
   type: msi
-  install_args: "/i {installer} /qn /norestart ZoomAutoUpdate=\"true\""
+  install_args: "/i {installer} /qn /norestart ZoomAutoUpdate=true"
 
 detect:
   file: "C:\\Program Files\\Zoom\\bin\\Zoom.exe"
