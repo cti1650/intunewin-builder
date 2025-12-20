@@ -41,3 +41,4 @@ jobs:
         with:
           name: intunewin-${{ inputs.app }}
           path: output/
+          retention-days: 3
