@@ -1,0 +1,19 @@
+name: gyazo
+
+download:
+  url: https://files.gyazo.com/setup/Gyazo-5.9.exe
+  file: Gyazo-5.9.exe
+
+installer:
+  type: exe
+  install_args: "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
+
+detect:
+  file: "C:\\Program Files (x86)\\Gyazo\\Gyazo.exe"
+  version: "5.9.0.0"
+  registry_display_name: "Gyazo"
+
+uninstall:
+  type: exe
+  path: "C:\\Program Files (x86)\\Gyazo\\unins000.exe"
+  args: "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"

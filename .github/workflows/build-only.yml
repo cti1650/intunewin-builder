@@ -9,6 +9,7 @@ on:
         type: choice
         options:
           - chrome
+          - gyazo
           - slack
           - warp
           - zoom

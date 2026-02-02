@@ -33,6 +33,7 @@ Intune 自体はブラックボックスとして扱い、
 | **Slack** | MSI (64-bit) | ファイルパス | Machine-Wide Installer |
 | **Cloudflare WARP** | MSI (64-bit) | レジストリ | 表示名検出 |
 | **Zoom Workplace** | MSI (64-bit) | レジストリ | 表示名検出 / 自動更新ON |
+| **Gyazo** | EXE (InnoSetup) | ファイルパス | スクリーンショット共有ツール |
 
 ## アプリ定義ファイル (YAML)
 
