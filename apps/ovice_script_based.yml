@@ -1,0 +1,20 @@
+# NOTE: oviceはユーザー固有の%LocalAppData%にインストールされます。
+#       Intune展開時はこのscript_based版を使用し、
+#       検出スクリプトで$env:LOCALAPPDATAを使用してください。
+name: ovice_script_based
+
+script_based: true
+
+download:
+  url: https://assets.ovice.io/desktop-apps/bin/ovice-x64-latest-Setup.exe
+
+installer:
+  type: script
+  install_args: "/S"
+
+detect:
+  registry_display_name: "ovice"
+
+uninstall:
+  type: script
+  registry_name: "ovice"
