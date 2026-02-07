@@ -9,11 +9,11 @@ installer:
   install_args: "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
 
 detect:
-  file: "C:\\Program Files\\Gyazo\\GyStation.exe"
+  file: "C:\\Program Files (x86)\\Gyazo\\GyStation.exe"
   version: "5.9.0.0"
   registry_display_name: "Gyazo"
 
 uninstall:
   type: exe
-  path: "C:\\Program Files\\Gyazo\\unins000.exe"
+  path: "C:\\Program Files (x86)\\Gyazo\\unins000.exe"
   args: "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
