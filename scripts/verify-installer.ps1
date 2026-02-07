@@ -187,23 +187,28 @@ try {
         if (-not $timeoutSeconds) { $timeoutSeconds = 600 }
 
         if ($type -eq "msi") {
+            Write-Host "Running MSI installer: msiexec $installArgs"
             $process = Start-Process msiexec -ArgumentList $installArgs -PassThru
             if (-not $process.WaitForExit($timeoutSeconds * 1000)) { $process | Stop-Process -Force; throw "MSI Installation Timed Out" }
             $exitCode = $process.ExitCode
+            Write-Host "MSI installation completed (exit code: $exitCode)"
         } elseif ($type -eq "msix") {
+            Write-Host "Running MSIX installer: Add-AppxPackage -Path $installerPath"
             try {
                 Add-AppxPackage -Path $installerPath -ErrorAction Stop
                 $exitCode = 0
-                Write-Host "MSIX installation completed"
+                Write-Host "MSIX installation completed (exit code: 0)"
             } catch {
                 $exitCode = 1
-                Write-Host "MSIX installation failed: $_"
+                Write-Warning "MSIX installation failed: $_"
                 throw
             }
         } else {
+            Write-Host "Running EXE installer: $installerPath $installArgs"
             $process = Start-Process -FilePath $installerPath -ArgumentList $installArgs -PassThru
             if (-not $process.WaitForExit($timeoutSeconds * 1000)) { $process | Stop-Process -Force; throw "EXE Installation Timed Out" }
             $exitCode = $process.ExitCode
+            Write-Host "EXE installation completed (exit code: $exitCode)"
         }
     }
 
@@ -354,14 +359,18 @@ try {
             $uninstallArgs = $appDef.uninstall.args
 
             if (Test-Path $uninstallPath) {
+                Write-Host "Running EXE uninstaller: $uninstallPath $uninstallArgs"
                 $process = Start-Process -FilePath $uninstallPath -ArgumentList $uninstallArgs -PassThru -Wait
                 if ($process.ExitCode -eq 0) {
                     $summary.UninstallStatus = "Success"
+                    Write-Host "EXE uninstall completed (exit code: 0)"
                 } else {
                     $summary.UninstallStatus = "Failed ($($process.ExitCode))"
+                    Write-Warning "EXE uninstall failed (exit code: $($process.ExitCode))"
                 }
             } else {
                 $summary.UninstallStatus = "Failed (Uninstaller not found)"
+                Write-Warning "EXE uninstaller not found: $uninstallPath"
             }
         }
         
