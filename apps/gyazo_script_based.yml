@@ -1,0 +1,19 @@
+name: gyazo_script_based
+
+script_based: true
+
+download:
+  url: https://files.gyazo.com/setup/Gyazo-5.9.exe
+
+installer:
+  type: script
+  install_args: "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
+
+detect:
+  file: "C:\\Program Files (x86)\\Gyazo\\GyStation.exe"
+  version: "5.9.0.0"
+  registry_display_name: "Gyazo"
+
+uninstall:
+  type: script
+  registry_name: "Gyazo"

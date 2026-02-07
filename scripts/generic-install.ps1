@@ -47,6 +47,29 @@ function Find-ProductCode {
     return $null
 }
 
+function Find-UninstallInfo {
+    param([string]$DisplayName)
+    $paths = @(
+        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
+        "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
+    )
+    foreach ($path in $paths) {
+        $match = Get-ItemProperty $path -ErrorAction SilentlyContinue |
+            Where-Object { $_.DisplayName -like "*$DisplayName*" } |
+            Select-Object -First 1
+        if ($match) {
+            return @{
+                DisplayName = $match.DisplayName
+                ProductCode = if ($match.PSChildName -match "^\{.*\}$") { $match.PSChildName } else { $null }
+                UninstallString = $match.UninstallString
+                QuietUninstallString = $match.QuietUninstallString
+            }
+        }
+    }
+    return $null
+}
+
 # ==========
 # Uninstall Mode
 # ==========
@@ -56,13 +79,23 @@ if ($Uninstall) {
         exit 1
     }
 
-    Write-Host "Searching for product code: $RegistryName"
-    $productCode = Find-ProductCode -DisplayName $RegistryName
+    Write-Host "Searching for uninstall info: $RegistryName"
+    $uninstallInfo = Find-UninstallInfo -DisplayName $RegistryName
 
-    if ($productCode) {
-        Write-Host "Found product code: $productCode"
-        Write-Host "Uninstalling..."
-        $process = Start-Process msiexec -ArgumentList "/x $productCode /qn /norestart" -PassThru -Wait
+    if (-not $uninstallInfo) {
+        Write-Warning "Product not found in registry: $RegistryName"
+        exit 0
+    }
+
+    Write-Host "Found: $($uninstallInfo.DisplayName)"
+
+    # MSI uninstall (has ProductCode)
+    if ($uninstallInfo.ProductCode) {
+        Write-Host "Uninstall type: MSI"
+        Write-Host "Product code: $($uninstallInfo.ProductCode)"
+        $uninstallCmd = "msiexec /x $($uninstallInfo.ProductCode) /qn /norestart"
+        Write-Host "Running: $uninstallCmd"
+        $process = Start-Process msiexec -ArgumentList "/x $($uninstallInfo.ProductCode) /qn /norestart" -PassThru -Wait
         if ($process.ExitCode -eq 0 -or $process.ExitCode -eq 3010) {
             Write-Host "Uninstall completed successfully (exit code: $($process.ExitCode))"
             exit 0
@@ -70,9 +103,54 @@ if ($Uninstall) {
             Write-Error "Uninstall failed with exit code: $($process.ExitCode)"
             exit $process.ExitCode
         }
+    }
+
+    # EXE uninstall (use QuietUninstallString or UninstallString)
+    $uninstallString = $uninstallInfo.QuietUninstallString
+    if (-not $uninstallString) {
+        $uninstallString = $uninstallInfo.UninstallString
+    }
+
+    if ($uninstallString) {
+        Write-Host "Uninstall type: EXE"
+        Write-Host "UninstallString: $uninstallString"
+
+        # Parse the uninstall string to extract path and arguments
+        # Handle both quoted and unquoted paths
+        if ($uninstallString -match '^"([^"]+)"(.*)$') {
+            $uninstallerPath = $Matches[1]
+            $uninstallerArgs = $Matches[2].Trim()
+        } elseif ($uninstallString -match '^([^\s]+\.exe)(.*)$') {
+            $uninstallerPath = $Matches[1]
+            $uninstallerArgs = $Matches[2].Trim()
+        } else {
+            # Fallback: treat the whole string as the path
+            $uninstallerPath = $uninstallString
+            $uninstallerArgs = ""
+        }
+
+        # Add silent flag if not present
+        if ($uninstallerArgs -notmatch '/S|/silent|/quiet|-s|-silent|-quiet' -and $uninstallerArgs -eq "") {
+            $uninstallerArgs = "/S"
+        }
+
+        if (Test-Path $uninstallerPath) {
+            Write-Host "Running: `"$uninstallerPath`" $uninstallerArgs"
+            $process = Start-Process -FilePath $uninstallerPath -ArgumentList $uninstallerArgs -PassThru -Wait
+            if ($process.ExitCode -eq 0) {
+                Write-Host "Uninstall completed successfully (exit code: 0)"
+                exit 0
+            } else {
+                Write-Error "Uninstall failed with exit code: $($process.ExitCode)"
+                exit $process.ExitCode
+            }
+        } else {
+            Write-Error "Uninstaller not found: $uninstallerPath"
+            exit 1
+        }
     } else {
-        Write-Warning "Product not found in registry: $RegistryName"
-        exit 0
+        Write-Error "No uninstall string found for: $RegistryName"
+        exit 1
     }
 }
 
