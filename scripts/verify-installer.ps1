@@ -21,6 +21,7 @@ $summary = [ordered]@{
     InstallStatus     = "Skipped"
     DetectionStatus   = "Skipped"
     VersionCheck      = "Skipped"
+    InstallLocation   = "Skipped"
     UninstallStatus   = "Skipped"
     CleanUpStatus     = "Skipped"
     OverallResult     = "Failed"
@@ -300,6 +301,48 @@ try {
             Write-Warning "File detection: Failed (not found: $($appDef.detect.file))"
             $detectionResults["File"] = $false
             $summary.VersionCheck = "Skipped (File not found)"
+        }
+
+        # インストール場所チェック（x64/x86両方を確認）
+        $detectFilePath = $appDef.detect.file
+        $x64Path = $null
+        $x86Path = $null
+        $x64Exists = $false
+        $x86Exists = $false
+
+        if ($detectFilePath -match "^C:\\Program Files\\(.+)$") {
+            $relativePath = $Matches[1]
+            $x64Path = "C:\Program Files\$relativePath"
+            $x86Path = "C:\Program Files (x86)\$relativePath"
+        } elseif ($detectFilePath -match "^C:\\Program Files \(x86\)\\(.+)$") {
+            $relativePath = $Matches[1]
+            $x64Path = "C:\Program Files\$relativePath"
+            $x86Path = "C:\Program Files (x86)\$relativePath"
+        }
+
+        if ($x64Path -and $x86Path) {
+            $x64Exists = Test-Path $x64Path
+            $x86Exists = Test-Path $x86Path
+
+            Write-Host "Install location check:"
+            Write-Host "  x64 path ($x64Path): $(if ($x64Exists) { 'Found' } else { 'Not found' })"
+            Write-Host "  x86 path ($x86Path): $(if ($x86Exists) { 'Found' } else { 'Not found' })"
+
+            if ($x64Exists -and $x86Exists) {
+                $summary.InstallLocation = "Both (x64 + x86)"
+                Write-Host "  -> Installed as: Both (x64 + x86)"
+            } elseif ($x64Exists) {
+                $summary.InstallLocation = "x64 only"
+                Write-Host "  -> Installed as: x64 only"
+            } elseif ($x86Exists) {
+                $summary.InstallLocation = "x86 only"
+                Write-Host "  -> Installed as: x86 only"
+            } else {
+                $summary.InstallLocation = "Not in Program Files"
+                Write-Host "  -> Installed as: Not in Program Files"
+            }
+        } else {
+            $summary.InstallLocation = "N/A (Non-standard path)"
         }
     }
 
