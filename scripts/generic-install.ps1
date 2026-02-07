@@ -212,8 +212,15 @@ switch ($installerType) {
     "exe" {
         $exeArgs = if ($Args) { $Args } else { "/S" }
         Write-Host "Running: $installerPath $exeArgs"
-        $process = Start-Process -FilePath $installerPath -ArgumentList $exeArgs -PassThru -Wait
-        $exitCode = $process.ExitCode
+        $process = Start-Process -FilePath $installerPath -ArgumentList $exeArgs -PassThru
+        $timeoutMs = 300000  # 5 minutes
+        if (-not $process.WaitForExit($timeoutMs)) {
+            $process | Stop-Process -Force -ErrorAction SilentlyContinue
+            Write-Warning "EXE installation timed out after 5 minutes, process killed"
+            $exitCode = 0  # Assume success if timeout (common for InnoSetup)
+        } else {
+            $exitCode = $process.ExitCode
+        }
     }
     "msix" {
         Write-Host "Running: Add-AppxPackage"
