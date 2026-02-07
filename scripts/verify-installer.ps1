@@ -350,7 +350,19 @@ try {
                 Write-Warning "MSIX uninstall failed: $_"
             }
         } elseif ($unType -eq "exe") {
-             $summary.UninstallStatus = "Skipped (EXE logic)"
+            $uninstallPath = $appDef.uninstall.path
+            $uninstallArgs = $appDef.uninstall.args
+
+            if (Test-Path $uninstallPath) {
+                $process = Start-Process -FilePath $uninstallPath -ArgumentList $uninstallArgs -PassThru -Wait
+                if ($process.ExitCode -eq 0) {
+                    $summary.UninstallStatus = "Success"
+                } else {
+                    $summary.UninstallStatus = "Failed ($($process.ExitCode))"
+                }
+            } else {
+                $summary.UninstallStatus = "Failed (Uninstaller not found)"
+            }
         }
         
         Start-Sleep -Seconds 5
