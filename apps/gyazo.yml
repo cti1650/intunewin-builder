@@ -17,3 +17,14 @@ uninstall:
   type: exe
   path: "C:\\Program Files (x86)\\Gyazo\\unins000.exe"
   args: "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
+
+# ==========
+# Intune Win32アプリ設定値（参照用）
+# ==========
+intune:
+  install_command: "Gyazo-5.9.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
+  uninstall_command: "\"C:\\Program Files (x86)\\Gyazo\\unins000.exe\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
+  detection:
+    type: file
+    path: "C:\\Program Files (x86)\\Gyazo"
+    file: "GyStation.exe"

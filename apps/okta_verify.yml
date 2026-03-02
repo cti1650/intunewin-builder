@@ -18,3 +18,28 @@ detect:
 uninstall:
   type: registry_string
   process_name: "OktaVerify"
+
+# ==========
+# Intune Win32アプリ設定値（参照用）
+# ==========
+intune:
+  install_command: "OktaVerifySetup.exe /quiet /norestart"
+  # WiX Bootstrapper形式のためアンインストーラーパスにバージョン固有GUIDが含まれる。
+  # レジストリのUninstallStringを動的に取得して実行するPowerShellコマンドを使用する。
+  uninstall_command: >-
+    powershell -ExecutionPolicy Bypass -Command
+    "Stop-Process -Name OktaVerify -Force -ErrorAction SilentlyContinue;
+    $e = Get-ItemProperty
+    'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+    'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    -ErrorAction SilentlyContinue |
+    Where-Object {$_.DisplayName -like '*Okta Verify*'} |
+    Select-Object -First 1;
+    if ($e) {
+      $cmd = if ($e.QuietUninstallString) {$e.QuietUninstallString} else {$e.UninstallString};
+      if ($cmd -match '^\"([^\"]+)\"\s*(.*)$') {Start-Process $Matches[1] -ArgumentList $Matches[2] -Wait}
+    }"
+  detection:
+    type: file
+    path: "C:\\Program Files\\Okta\\Okta Verify"
+    file: "OktaVerify.exe"

@@ -16,3 +16,15 @@ detect:
 uninstall:
   type: msi
   args: "/x {product_code} /qn"
+
+# ==========
+# Intune Win32アプリ設定値（参照用）
+# ==========
+intune:
+  install_command: "msiexec /i Cloudflare_WARP_Release-x64.msi /qn /norestart"
+  # ProductCodeはMSIのプロパティまたは検証時のレジストリから確認
+  uninstall_command: 'msiexec /x "{ProductCode}" /qn'
+  detection:
+    type: file
+    path: "C:\\Program Files\\Cloudflare\\Cloudflare WARP"
+    file: "Cloudflare WARP.exe"
