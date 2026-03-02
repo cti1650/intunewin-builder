@@ -365,6 +365,18 @@ try {
         Write-Host "Uninstalling..."
         $unType = $appDef.uninstall.type
 
+        # Stop processes/services before uninstalling (if specified)
+        if ($appDef.uninstall.process_name) {
+            Write-Host "Stopping process: $($appDef.uninstall.process_name)"
+            Stop-Process -Name $appDef.uninstall.process_name -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 3
+        }
+        if ($appDef.uninstall.service_name) {
+            Write-Host "Stopping service: $($appDef.uninstall.service_name)"
+            Stop-Service -Name $appDef.uninstall.service_name -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 3
+        }
+
         if ($unType -eq "script") {
             # Script-based uninstall
             $registryName = $appDef.uninstall.registry_name
@@ -384,8 +396,14 @@ try {
             if ($match -and $match.PSChildName -match "^\{.*\}$") {
                 $pCode = $match.PSChildName
                 $uArgs = $appDef.uninstall.args -replace "\{product_code\}", $pCode
-                Start-Process msiexec -ArgumentList $uArgs -Wait
-                $summary.UninstallStatus = "Success"
+                $proc = Start-Process msiexec -ArgumentList $uArgs -PassThru -Wait
+                $exitCode = $proc.ExitCode
+                Write-Host "MSI uninstall exit code: $exitCode"
+                if ($exitCode -eq 0 -or $exitCode -eq 3010) {
+                    $summary.UninstallStatus = "Success ($exitCode)"
+                } else {
+                    $summary.UninstallStatus = "Failed ($exitCode)"
+                }
             } else { $summary.UninstallStatus = "Failed (No ProductCode)" }
         } elseif ($unType -eq "msix") {
             $pkgName = $appDef.uninstall.package_name

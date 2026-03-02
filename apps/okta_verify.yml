@@ -18,3 +18,4 @@ detect:
 uninstall:
   type: msi
   args: "/x {product_code} /qn REBOOT=ReallySuppress"
+  process_name: "OktaVerify"
