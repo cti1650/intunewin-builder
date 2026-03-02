@@ -1,0 +1,20 @@
+# NOTE: このアプリはOkta組織固有のURLを使用します。
+#       ビルド時にGitHub Actionsのinputでorganization名を指定してください。
+#       参考: https://zenn.dev/joug/articles/3b857a5757d8e2
+name: okta_verify
+
+download:
+  url: https://YOUR_ORGANIZATION-admin.okta.com/api/v1/artifacts/WINDOWS_OKTA_VERIFY/download?releaseChannel=GA
+  file: OktaVerifySetup.exe
+
+installer:
+  type: exe
+  install_args: "/quiet /norestart"
+
+detect:
+  file: "C:\\Program Files\\Okta\\Okta Verify\\OktaVerify.exe"
+  registry_display_name: "Okta Verify"
+
+uninstall:
+  type: msi
+  args: "/x {product_code} /qn"

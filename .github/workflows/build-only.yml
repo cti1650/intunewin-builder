@@ -10,10 +10,15 @@ on:
         options:
           - chrome
           - gyazo
+          - okta_verify
           - ovice
           - slack
           - warp
           - zoom
+      organization:
+        description: 'Okta organization name (okta_verify のみ必要)'
+        required: false
+        type: string
 
 jobs:
   build:
@@ -31,6 +36,7 @@ jobs:
         uses: ./.github/actions/build-intunewin
         with:
           app: ${{ inputs.app }}
+          organization: ${{ inputs.organization }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

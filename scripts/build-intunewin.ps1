@@ -1,6 +1,7 @@
 param (
   [Parameter(Mandatory)]
-  [string]$App
+  [string]$App,
+  [string]$Organization = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -19,6 +20,14 @@ $appDef = Get-Content $appDefPath | ConvertFrom-Yaml
 
 $url   = $appDef.download.url
 $setup = $appDef.download.file
+
+# Substitute organization placeholder if provided
+if ($Organization) {
+  $url = $url -replace 'YOUR_ORGANIZATION', $Organization
+}
+if ($url -match 'YOUR_ORGANIZATION') {
+  throw "URL contains 'YOUR_ORGANIZATION' placeholder. Please provide the -Organization parameter (GitHub Actions input: 'organization')."
+}
 
 # ==========
 # Prepare directories

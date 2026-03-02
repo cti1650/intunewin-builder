@@ -7,6 +7,11 @@ on:
         description: 'Target application name'
         required: true
         type: string
+      organization:
+        description: 'Organization name for URL placeholder substitution (optional)'
+        required: false
+        type: string
+        default: ''
 
 jobs:
   run-logic:
@@ -29,6 +34,7 @@ jobs:
         uses: ./.github/actions/build-intunewin
         with:
           app: ${{ inputs.app }}
+          organization: ${{ inputs.organization }}
 
       - name: Verify installer
         uses: ./.github/actions/verify-installer

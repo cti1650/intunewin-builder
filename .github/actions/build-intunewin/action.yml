@@ -5,6 +5,10 @@ inputs:
   app:
     description: Target application name
     required: true
+  organization:
+    description: Organization name for URL placeholder substitution (optional)
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -12,4 +16,4 @@ runs:
     - name: Build intunewin
       shell: pwsh
       run: |
-        scripts/build-intunewin.ps1 -App "${{ inputs.app }}"
+        scripts/build-intunewin.ps1 -App "${{ inputs.app }}" -Organization "${{ inputs.organization }}"

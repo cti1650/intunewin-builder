@@ -10,10 +10,15 @@ on:
         options:
           - chrome
           - gyazo
+          - okta_verify
           - ovice
           - slack
           - warp
           - zoom
+      organization:
+        description: 'Okta organization name (okta_verify のみ必要)'
+        required: false
+        type: string
 
 jobs:
   build_and_verify:
@@ -21,3 +26,4 @@ jobs:
     uses: ./.github/workflows/_core-build.yml
     with:
       app: ${{ inputs.app }}
+      organization: ${{ inputs.organization }}
