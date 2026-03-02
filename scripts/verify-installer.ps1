@@ -405,6 +405,35 @@ try {
                     $summary.UninstallStatus = "Failed ($exitCode)"
                 }
             } else { $summary.UninstallStatus = "Failed (No ProductCode)" }
+        } elseif ($unType -eq "registry_string") {
+            # Use UninstallString / QuietUninstallString from registry
+            $searchName = $appDef.detect.registry_display_name
+            $paths = @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*")
+            $entry = $paths | ForEach-Object { Get-ItemProperty $_ -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -like "*$searchName*" } | Select-Object -First 1
+            if ($entry) {
+                $uninstallCmd = if ($entry.QuietUninstallString) { $entry.QuietUninstallString } else { $entry.UninstallString }
+                Write-Host "Uninstall command: $uninstallCmd"
+                if ($uninstallCmd -match '^"([^"]+)"\s*(.*)$') {
+                    $exe = $Matches[1]; $uArgs = $Matches[2].Trim()
+                } else {
+                    $exe = $uninstallCmd; $uArgs = ""
+                }
+                $proc = if ($uArgs) {
+                    Start-Process -FilePath $exe -ArgumentList $uArgs -PassThru -Wait
+                } else {
+                    Start-Process -FilePath $exe -PassThru -Wait
+                }
+                $exitCode = $proc.ExitCode
+                Write-Host "Uninstall exit code: $exitCode"
+                if ($exitCode -eq 0 -or $exitCode -eq 3010) {
+                    $summary.UninstallStatus = "Success ($exitCode)"
+                } else {
+                    $summary.UninstallStatus = "Failed ($exitCode)"
+                }
+            } else {
+                $summary.UninstallStatus = "Failed (Registry entry not found)"
+                Write-Warning "Registry entry not found for: $searchName"
+            }
         } elseif ($unType -eq "msix") {
             $pkgName = $appDef.uninstall.package_name
             try {

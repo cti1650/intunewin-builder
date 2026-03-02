@@ -16,6 +16,5 @@ detect:
   registry_display_name: "Okta Verify"
 
 uninstall:
-  type: msi
-  args: "/x {product_code} /qn REBOOT=ReallySuppress"
+  type: registry_string
   process_name: "OktaVerify"
