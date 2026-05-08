@@ -1,0 +1,28 @@
+# NOTE: Slack本体のインストールは行わず、Public Desktopにショートカットだけ作る。
+#       本体は apps/slack.yml (MSI) で別途配布する想定。
+name: slack_shortcut
+
+script_based: true
+custom_script: true
+
+installer:
+  type: script
+  script: install.ps1
+
+uninstall:
+  type: script
+  script: uninstall.ps1
+
+detect:
+  file: "C:\\Users\\Public\\Desktop\\Slack.lnk"
+
+# ==========
+# Intune Win32アプリ設定値（参照用）
+# ==========
+intune:
+  install_command: "powershell.exe -ExecutionPolicy Bypass -File install.ps1"
+  uninstall_command: "powershell.exe -ExecutionPolicy Bypass -File uninstall.ps1"
+  detection:
+    type: file
+    path: "C:\\Users\\Public\\Desktop"
+    file: "Slack.lnk"
