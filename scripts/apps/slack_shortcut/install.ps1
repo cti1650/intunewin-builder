@@ -1,7 +1,8 @@
 $ErrorActionPreference = "Stop"
 
+# Microsoft Store版 Slack の AppsFolder ID
+$AppId        = "SlackTechnologiesInc.Slack_zvaqb2p7yp98r!Slack"
 $ShortcutPath = "$env:PUBLIC\Desktop\Slack.lnk"
-$TargetPath   = "C:\Program Files\Slack\slack.exe"
 
 # Public Desktop が無い環境(GitHub Actionsランナー等)に備えて親ディレクトリを保証
 $ShortcutDir = Split-Path -Parent $ShortcutPath
@@ -9,17 +10,23 @@ if (-not (Test-Path $ShortcutDir)) {
     New-Item -Path $ShortcutDir -ItemType Directory -Force | Out-Null
 }
 
-$WshShell = New-Object -ComObject WScript.Shell
-$Shortcut = $WshShell.CreateShortcut($ShortcutPath)
-$Shortcut.TargetPath        = $TargetPath
-$Shortcut.WorkingDirectory  = "C:\Program Files\Slack"
-$Shortcut.Description       = "Slack"
-$Shortcut.Save()
+try {
+    # UWPアプリへの直接リンクは Save() のターゲット検証で失敗するため、
+    # explorer.exe + AppsFolder URI 引数で間接起動する形式にする
+    $WshShell = New-Object -ComObject WScript.Shell
+    $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
+    $Shortcut.TargetPath  = "$env:WINDIR\explorer.exe"
+    $Shortcut.Arguments   = "shell:AppsFolder\$AppId"
+    $Shortcut.Description = "Slack for Desktop"
+    $Shortcut.Save()
 
-if (Test-Path $ShortcutPath) {
-    Write-Output "Shortcut created successfully."
+    if (-not (Test-Path $ShortcutPath)) {
+        throw "Shortcut not found at expected path: $ShortcutPath"
+    }
+    Write-Output "Slack shortcut created successfully."
     exit 0
-} else {
-    Write-Error "Shortcut creation failed."
-    exit 1
+}
+catch {
+    Write-Error "Failed to create shortcut: $_"
+    exit 1618  # MSI retry code: Intuneに再試行させる
 }

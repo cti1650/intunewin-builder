@@ -36,7 +36,7 @@ Intune 自体はブラックボックスとして扱い、
 | **Gyazo** | EXE (InnoSetup) | ファイルパス | スクリーンショット共有ツール |
 | **ovice** | EXE (NSIS) | レジストリ | ユーザー固有パス ※script_based推奨 |
 | **Company Portal Shortcut** | カスタム PowerShell | ファイルパス (.lnk) | Public Desktop にポータルサイトのショートカットを作成 |
-| **Slack Shortcut** | カスタム PowerShell | ファイルパス (.lnk) | Public Desktop に Slack 本体 (slack.exe) へのショートカットを作成 |
+| **Slack Shortcut** | カスタム PowerShell | ファイルパス (.lnk) | Public Desktop に Microsoft Store 版 Slack へのショートカットを作成 |
 
 ## アプリ定義ファイル (YAML)
 
