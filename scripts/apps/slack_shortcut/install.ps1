@@ -1,8 +1,11 @@
 $ErrorActionPreference = "Stop"
 
 # Microsoft Store版 Slack
-$AppxName     = "SlackTechnologiesInc.Slack"
-$AppId        = "SlackTechnologiesInc.Slack_zvaqb2p7yp98r!Slack"
+# - Package Name: 91750D7E.Slack
+# - PackageFamilyName: 91750D7E.Slack_8she8kybcnzg4
+# - 91750D7E は Microsoft Store が Slack 社に割り当てた publisher hash
+$AppxName     = "91750D7E.Slack"
+$AppId        = "91750D7E.Slack_8she8kybcnzg4!Slack"
 $ShortcutPath = "$env:PUBLIC\Desktop\Slack.lnk"
 
 # Public Desktop が無い環境(GitHub Actionsランナー等)に備えて親ディレクトリを保証
