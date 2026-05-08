@@ -9,6 +9,7 @@ on:
         type: choice
         options:
           - slack_script_based
+          - company_portal_shortcut
 
 jobs:
   verify:

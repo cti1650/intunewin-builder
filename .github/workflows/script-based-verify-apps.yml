@@ -12,13 +12,21 @@ jobs:
       app_matrix: ${{ steps.set-matrix.outputs.app_matrix }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install powershell-yaml
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module powershell-yaml -Scope CurrentUser -Force
+
       - name: Discover script_based app definitions
         id: set-matrix
         shell: pwsh
         run: |
-          # script_basedはファイル名に_script_basedが含まれるもののみ
-          $apps = Get-ChildItem -Path "apps" -Filter "*_script_based.yml" |
-            Select-Object -ExpandProperty BaseName
+          # script_based: true を含むYAMLを抽出（ファイル名規約に依存しない）
+          $apps = Get-ChildItem -Path "apps" -Filter "*.yml" | ForEach-Object {
+            $def = Get-Content $_.FullName | ConvertFrom-Yaml
+            if ($def.script_based -eq $true) { $_.BaseName }
+          }
           $json = ConvertTo-Json -Compress @($apps)
           "app_matrix=$json" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
