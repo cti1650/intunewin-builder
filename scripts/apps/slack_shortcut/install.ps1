@@ -7,6 +7,7 @@ $ErrorActionPreference = "Stop"
 $AppxName     = "91750D7E.Slack"
 $AppId        = "91750D7E.Slack_8she8kybcnzg4!Slack"
 $ShortcutPath = "$env:PUBLIC\Desktop\Slack.lnk"
+$Description  = "Slack for Desktop"
 
 # Public Desktop が無い環境(GitHub Actionsランナー等)に備えて親ディレクトリを保証
 $ShortcutDir = Split-Path -Parent $ShortcutPath
@@ -17,21 +18,39 @@ if (-not (Test-Path $ShortcutDir)) {
 try {
     $WshShell = New-Object -ComObject WScript.Shell
     $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
-    $Shortcut.Description = "Slack for Desktop"
 
-    # UWP本体がインストール済みなら直接 shell:AppsFolder\<AppId> をターゲットにする。
-    # → アイコンがSlack本体のものになり、クリックで確実にSlackが起動する。
-    # 未インストール環境(CIランナー等)は Save() の検証に失敗するため
-    # explorer.exe 経由のフォールバックでひとまず .lnk を生成する。
+    # Public Desktop に置く UWP ショートカットは TargetPath = shell:AppsFolder\... を
+    # 直接指定するとクリックしても起動しない (システムコンテキストでの解決が機能しないため)。
+    # explorer.exe + AppsFolder URI 引数で確実に起動させる形式にする。
+    $Shortcut.TargetPath  = "$env:WINDIR\explorer.exe"
+    $Shortcut.Arguments   = "shell:AppsFolder\$AppId"
+    $Shortcut.Description = $Description
+
+    # explorer.exe をターゲットにすると既定でフォルダ風アイコンになるため、
+    # UWP本体の実行ファイルから IconLocation を引き当てる。
+    # (App更新で InstallLocation のバージョン部分が変わると壊れる点は許容)
     $appx = Get-AppxPackage -AllUsers -Name $AppxName -ErrorAction SilentlyContinue | Select-Object -First 1
     if ($appx) {
         Write-Host "Found UWP app: $($appx.PackageFullName)"
-        $Shortcut.TargetPath = "shell:AppsFolder\$AppId"
+        try {
+            $manifestPath = Join-Path $appx.InstallLocation "AppxManifest.xml"
+            [xml]$manifest = Get-Content -LiteralPath $manifestPath -ErrorAction Stop
+            $mainApp = $manifest.Package.Applications.Application | Select-Object -First 1
+            $exeName = $mainApp.Executable
+            if ($exeName) {
+                $iconPath = Join-Path $appx.InstallLocation $exeName
+                if (Test-Path -LiteralPath $iconPath) {
+                    $Shortcut.IconLocation = "$iconPath,0"
+                    Write-Host "Icon set to: $iconPath"
+                }
+            }
+        } catch {
+            Write-Warning "Could not set custom icon: $_"
+        }
     } else {
-        Write-Warning "$AppxName not installed; using explorer.exe fallback"
-        $Shortcut.TargetPath = "$env:WINDIR\explorer.exe"
-        $Shortcut.Arguments  = "shell:AppsFolder\$AppId"
+        Write-Warning "$AppxName not installed; icon will fall back to explorer.exe"
     }
+
     $Shortcut.Save()
 
     if (-not (Test-Path $ShortcutPath)) {
