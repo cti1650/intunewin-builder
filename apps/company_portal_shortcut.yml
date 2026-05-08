@@ -1,0 +1,32 @@
+# NOTE: ダウンロード不要のカスタムスクリプト型アプリ。
+#       ポータルサイト (Microsoft Company Portal) へのショートカットを
+#       Public Desktop に作成する。
+name: company_portal_shortcut
+
+script_based: true
+custom_script: true
+
+# custom_script: true の場合、scripts/apps/<name>/install.ps1 を
+# そのまま .intunewin に同梱して Intune から実行する。
+installer:
+  type: script
+  script: install.ps1
+
+uninstall:
+  type: script
+  script: uninstall.ps1
+
+detect:
+  # ショートカット (.lnk) の存在を Intune の検出ルールに使う
+  file: "C:\\Users\\Public\\Desktop\\ポータルサイト.lnk"
+
+# ==========
+# Intune Win32アプリ設定値（参照用）
+# ==========
+intune:
+  install_command: "powershell.exe -ExecutionPolicy Bypass -File install.ps1"
+  uninstall_command: "powershell.exe -ExecutionPolicy Bypass -File uninstall.ps1"
+  detection:
+    type: file
+    path: "C:\\Users\\Public\\Desktop"
+    file: "ポータルサイト.lnk"

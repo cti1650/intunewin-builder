@@ -35,10 +35,17 @@ Intune 自体はブラックボックスとして扱い、
 | **Zoom Workplace** | MSI (64-bit) | レジストリ | 表示名検出 / 自動更新ON |
 | **Gyazo** | EXE (InnoSetup) | ファイルパス | スクリーンショット共有ツール |
 | **ovice** | EXE (NSIS) | レジストリ | ユーザー固有パス ※script_based推奨 |
+| **Company Portal Shortcut** | カスタム PowerShell | ファイルパス (.lnk) | Public Desktop にポータルサイトのショートカットを作成 |
 
 ## アプリ定義ファイル (YAML)
 
 `apps/` ディレクトリに各アプリの定義ファイルを配置。
+
+デプロイ方式は3種類:
+
+1. **通常 (MSI/EXE/MSIX)**: ビルド時にインストーラを同梱
+2. **script_based**: 端末側で `generic-install.ps1` がURLから取得して実行
+3. **script_based + custom_script**: `scripts/apps/<name>/` の任意のPS1を同梱（ダウンロード不要なケース）
 
 ```yaml
 name: アプリ名

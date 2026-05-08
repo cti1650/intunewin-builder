@@ -117,27 +117,42 @@ try {
     # Snapshot before
     $snapshotBefore = Get-InstalledAppsSnapshot
 
+    $isCustomScript = $appDef.custom_script -eq $true
+
     if ($isScriptBased) {
         # ==========
         # Script-based Install
         # ==========
-        Write-Host "Mode: Script-based deployment"
         $summary.AppArchitecture = "N/A (Script)"
         $summary.ArchCheck = "Skipped (Script)"
 
-        $url = $appDef.download.url
-        $installArgs = $appDef.installer.install_args
-
-        Write-Host "Installing via generic-install.ps1..."
-        Write-Host "  URL: $url"
-        Write-Host "  Args: $installArgs"
-
-        if ($installArgs) {
-            & scripts/generic-install.ps1 -Url $url -Args $installArgs
+        if ($isCustomScript) {
+            Write-Host "Mode: Script-based deployment (custom_script)"
+            $installScriptName = $appDef.installer.script
+            if (-not $installScriptName) { $installScriptName = "install.ps1" }
+            $installScriptPath = "scripts/apps/$App/$installScriptName"
+            if (-not (Test-Path $installScriptPath)) {
+                throw "Custom install script not found: $installScriptPath"
+            }
+            Write-Host "Running custom install script: $installScriptPath"
+            & powershell.exe -ExecutionPolicy Bypass -File $installScriptPath
+            $exitCode = $LASTEXITCODE
         } else {
-            & scripts/generic-install.ps1 -Url $url
+            Write-Host "Mode: Script-based deployment"
+            $url = $appDef.download.url
+            $installArgs = $appDef.installer.install_args
+
+            Write-Host "Installing via generic-install.ps1..."
+            Write-Host "  URL: $url"
+            Write-Host "  Args: $installArgs"
+
+            if ($installArgs) {
+                & scripts/generic-install.ps1 -Url $url -Args $installArgs
+            } else {
+                & scripts/generic-install.ps1 -Url $url
+            }
+            $exitCode = $LASTEXITCODE
         }
-        $exitCode = $LASTEXITCODE
 
     } else {
         # ==========
@@ -378,16 +393,39 @@ try {
         }
 
         if ($unType -eq "script") {
-            # Script-based uninstall
-            $registryName = $appDef.uninstall.registry_name
-            if (-not $registryName) { $registryName = $appDef.detect.registry_display_name }
-            Write-Host "Uninstalling via generic-install.ps1..."
-            Write-Host "  RegistryName: $registryName"
-            & scripts/generic-install.ps1 -Uninstall -RegistryName $registryName
-            if ($LASTEXITCODE -eq 0) {
-                $summary.UninstallStatus = "Success"
+            if ($isCustomScript) {
+                # Custom uninstall script
+                $uninstallScriptName = $appDef.uninstall.script
+                if (-not $uninstallScriptName) {
+                    Write-Warning "custom_script app has no uninstall.script defined; skipping"
+                    $summary.UninstallStatus = "Skipped (no script)"
+                } else {
+                    $uninstallScriptPath = "scripts/apps/$App/$uninstallScriptName"
+                    if (-not (Test-Path $uninstallScriptPath)) {
+                        $summary.UninstallStatus = "Failed (script not found)"
+                        Write-Warning "Custom uninstall script not found: $uninstallScriptPath"
+                    } else {
+                        Write-Host "Running custom uninstall script: $uninstallScriptPath"
+                        & powershell.exe -ExecutionPolicy Bypass -File $uninstallScriptPath
+                        if ($LASTEXITCODE -eq 0) {
+                            $summary.UninstallStatus = "Success"
+                        } else {
+                            $summary.UninstallStatus = "Failed ($LASTEXITCODE)"
+                        }
+                    }
+                }
             } else {
-                $summary.UninstallStatus = "Failed ($LASTEXITCODE)"
+                # Script-based uninstall (generic-install.ps1)
+                $registryName = $appDef.uninstall.registry_name
+                if (-not $registryName) { $registryName = $appDef.detect.registry_display_name }
+                Write-Host "Uninstalling via generic-install.ps1..."
+                Write-Host "  RegistryName: $registryName"
+                & scripts/generic-install.ps1 -Uninstall -RegistryName $registryName
+                if ($LASTEXITCODE -eq 0) {
+                    $summary.UninstallStatus = "Success"
+                } else {
+                    $summary.UninstallStatus = "Failed ($LASTEXITCODE)"
+                }
             }
         } elseif ($unType -eq "msi") {
             $searchName = $appDef.detect.registry_display_name
