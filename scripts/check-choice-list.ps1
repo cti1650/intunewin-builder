@@ -29,6 +29,8 @@ if (-not (Get-Module -ListAvailable -Name powershell-yaml)) {
 }
 Import-Module powershell-yaml
 
+. "$PSScriptRoot/lib.ps1"
+
 if (-not (Test-Path $WorkflowPath)) {
     Write-Host "ERROR: workflow file not found: $WorkflowPath" -ForegroundColor Red
     exit 1
@@ -51,13 +53,7 @@ if (-not $onBlock) {
 
 $choices = @($onBlock.workflow_dispatch.inputs.app.options) | Where-Object { $_ } | Sort-Object
 
-$apps = Get-ChildItem -Path $AppsPath -Filter *.yml -File | ForEach-Object {
-    $def = Get-Content $_.FullName -Raw | ConvertFrom-Yaml
-    if ($def.script_based -eq $true) { return }
-    if ($def.custom_script -eq $true) { return }
-    if ($_.BaseName -match '_script_based$') { return }
-    $_.BaseName
-} | Where-Object { $_ } | Sort-Object
+$apps = Get-ChoiceListAppNames -AppsPath $AppsPath
 
 $missing = @($apps | Where-Object { $_ -notin $choices })
 $extra = @($choices | Where-Object { $_ -notin $apps })
