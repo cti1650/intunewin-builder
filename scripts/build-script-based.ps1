@@ -5,17 +5,14 @@ param (
 
 $ErrorActionPreference = "Stop"
 
+. "$PSScriptRoot/lib.ps1"
+
 Write-Host "Building script-based intunewin for app: $App"
 
 # ==========
 # Load app definition
 # ==========
-$appDefPath = "apps/$App.yml"
-if (-not (Test-Path $appDefPath)) {
-    throw "App definition not found: $appDefPath"
-}
-
-$appDef = Get-Content $appDefPath | ConvertFrom-Yaml
+$appDef = Get-AppDefinition -App $App
 
 if (-not $appDef.script_based) {
     throw "This app is not configured for script-based deployment. Use build-intunewin.ps1 instead."
@@ -114,30 +111,9 @@ Registry: $($appDef.detect.registry_display_name)
 $metadataContent | Out-File "app/intune-config.txt" -Encoding utf8
 
 # ==========
-# Download IntuneWinAppUtil
+# Resolve IntuneWinAppUtil (cached if already extracted)
 # ==========
-Write-Host "Downloading IntuneWinAppUtil..."
-
-$zipPath = "IntuneWinAppUtil.zip"
-$toolDir = "IntuneWinAppUtil"
-$toolName = "IntuneWinAppUtil.exe"
-
-Invoke-WebRequest `
-    -Uri "https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/archive/refs/heads/master.zip" `
-    -OutFile $zipPath
-
-Expand-Archive -Path $zipPath -DestinationPath $toolDir -Force
-
-$toolPath = Get-ChildItem `
-    -Path $toolDir `
-    -Recurse `
-    -Filter $toolName `
-    | Select-Object -First 1 `
-    | Select-Object -ExpandProperty FullName
-
-if (-not $toolPath) {
-    throw "IntuneWinAppUtil.exe not found."
-}
+$toolPath = Get-IntuneWinAppUtilPath
 
 # ==========
 # Build intunewin

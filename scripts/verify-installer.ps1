@@ -6,6 +6,8 @@ param (
 $ErrorActionPreference = "Stop"
 $ProgressPreference = 'SilentlyContinue'
 
+. "$PSScriptRoot/lib.ps1"
+
 # ==========
 # Result Summary Object
 # ==========
@@ -31,12 +33,7 @@ $summary = [ordered]@{
 # Helper functions
 # ==========
 function Get-InstalledAppsSnapshot {
-  $registryPaths = @(
-    "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
-    "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*",
-    "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*"
-  )
-  $registryApps = $registryPaths | ForEach-Object {
+  $registryApps = $script:UninstallRegistryPaths | ForEach-Object {
     Get-ItemProperty $_ -ErrorAction SilentlyContinue
   } | Where-Object { $_.DisplayName } |
     Select-Object -ExpandProperty DisplayName
@@ -106,9 +103,7 @@ try {
     Write-Host "Verifying installer for app: $App"
 
     # Load definition
-    $appDefPath = "apps/$App.yml"
-    if (-not (Test-Path $appDefPath)) { throw "App definition not found: $appDefPath" }
-    $appDef = Get-Content $appDefPath | ConvertFrom-Yaml
+    $appDef = Get-AppDefinition -App $App
 
     $isScriptBased = $appDef.script_based -eq $true
     $type = $appDef.installer.type
@@ -429,8 +424,7 @@ try {
             }
         } elseif ($unType -eq "msi") {
             $searchName = $appDef.detect.registry_display_name
-            $paths = @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*")
-            $match = $paths | ForEach-Object { Get-ItemProperty $_ -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -like "*$searchName*" } | Select-Object -First 1
+            $match = Find-RegistryUninstallEntry -DisplayName $searchName
             if ($match -and $match.PSChildName -match "^\{.*\}$") {
                 $pCode = $match.PSChildName
                 $uArgs = $appDef.uninstall.args -replace "\{product_code\}", $pCode
@@ -446,8 +440,7 @@ try {
         } elseif ($unType -eq "registry_string") {
             # Use UninstallString / QuietUninstallString from registry
             $searchName = $appDef.detect.registry_display_name
-            $paths = @("HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*", "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*")
-            $entry = $paths | ForEach-Object { Get-ItemProperty $_ -ErrorAction SilentlyContinue } | Where-Object { $_.DisplayName -like "*$searchName*" } | Select-Object -First 1
+            $entry = Find-RegistryUninstallEntry -DisplayName $searchName
             if ($entry) {
                 $uninstallCmd = if ($entry.QuietUninstallString) { $entry.QuietUninstallString } else { $entry.UninstallString }
                 Write-Host "Uninstall command: $uninstallCmd"

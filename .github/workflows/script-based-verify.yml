@@ -26,6 +26,12 @@ jobs:
           Set-PSRepository PSGallery -InstallationPolicy Trusted
           Install-Module powershell-yaml -Scope CurrentUser -Force
 
+      - name: Cache IntuneWinAppUtil
+        uses: actions/cache@v4
+        with:
+          path: IntuneWinAppUtil
+          key: intunewinapputil-master-v1
+
       - name: Build script-based intunewin
         shell: pwsh
         run: |
