@@ -21,17 +21,14 @@ if (-not $appDef.script_based) {
 # ==========
 # Prepare directories
 # ==========
-New-Item `
-    app, `
-    output/intunewin, `
-    output/installer `
-    -ItemType Directory -Force | Out-Null
+New-Item app, output/intunewin, output/installer -ItemType Directory -Force | Out-Null
 
 # ==========
-# Copy install scripts to app folder
+# Copy install scripts to app folder, build context object
 # ==========
 $isCustomScript = $appDef.custom_script -eq $true
-$mainScriptName = "generic-install.ps1"
+$installBehavior = $appDef.intune.install_behavior
+$installBehaviorLabel = if ($installBehavior -eq 'user') { 'User' } else { 'System' }
 
 if ($isCustomScript) {
     $customDir = "scripts/apps/$App"
@@ -45,10 +42,8 @@ if ($isCustomScript) {
     if (-not (Test-Path $installSrc)) {
         throw "Custom install script not found: $installSrc"
     }
-
     Write-Host "Copying custom install script: $installSrc"
     Copy-Item $installSrc "app/$installScript" -Force
-    $mainScriptName = $installScript
 
     if ($appDef.uninstall.script) {
         $uninstallSrc = Join-Path $customDir $appDef.uninstall.script
@@ -58,62 +53,64 @@ if ($isCustomScript) {
         Write-Host "Copying custom uninstall script: $uninstallSrc"
         Copy-Item $uninstallSrc "app/$($appDef.uninstall.script)" -Force
     }
+
+    $ctx = [ordered]@{
+        Mode             = 'custom_script'
+        MainScriptName   = $installScript
+        InstallCommand   = "powershell.exe -ExecutionPolicy Bypass -File $installScript"
+        UninstallCommand = if ($appDef.uninstall.script) {
+            "powershell.exe -ExecutionPolicy Bypass -File $($appDef.uninstall.script)"
+        } else { '(none)' }
+        UninstallScript  = $appDef.uninstall.script
+        DetectFile       = $appDef.detect.file
+        DetectRegistry   = $appDef.detect.registry_display_name
+    }
 } else {
     Write-Host "Copying generic-install.ps1..."
     Copy-Item "scripts/generic-install.ps1" "app/generic-install.ps1" -Force
+
+    $ctx = [ordered]@{
+        Mode             = 'script_based'
+        MainScriptName   = 'generic-install.ps1'
+        InstallCommand   = "powershell.exe -ExecutionPolicy Bypass -File generic-install.ps1 -Url `"$($appDef.download.url)`" -Args `"$($appDef.installer.install_args)`""
+        UninstallCommand = "powershell.exe -ExecutionPolicy Bypass -File generic-install.ps1 -Uninstall -RegistryName `"$($appDef.uninstall.registry_name)`""
+        DownloadUrl      = $appDef.download.url
+        InstallArgs      = $appDef.installer.install_args
+        DetectFile       = $appDef.detect.file
+        DetectRegistry   = $appDef.detect.registry_display_name
+    }
 }
 
 # ==========
-# Generate metadata file for reference
+# Generate intune-config.txt (operator が Intune UI に貼る参照テキスト)
 # ==========
-$installBehavior = $appDef.intune.install_behavior
-$installBehaviorLabel = if ($installBehavior -eq 'user') { 'User' } else { 'System' }
+$detectLines = @("File: $($ctx.DetectFile)")
+if ($ctx.DetectRegistry) { $detectLines += "Registry: $($ctx.DetectRegistry)" }
 
-if ($isCustomScript) {
-    $installCmd = "powershell.exe -ExecutionPolicy Bypass -File $mainScriptName"
-    $uninstallCmd = if ($appDef.uninstall.script) {
-        "powershell.exe -ExecutionPolicy Bypass -File $($appDef.uninstall.script)"
-    } else { "(none)" }
-    $metadataContent = @"
-# Script-Based Deployment Configuration (Custom Script)
-# Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-
-App: $($appDef.name)
-Mode: custom_script
-Install Behavior: $installBehaviorLabel
-
-# Intune Install Command:
-$installCmd
-
-# Intune Uninstall Command:
-$uninstallCmd
-
-# Detection Rule:
-File: $($appDef.detect.file)
-"@
+$header = if ($ctx.Mode -eq 'custom_script') {
+    'Script-Based Deployment Configuration (Custom Script)'
 } else {
-    $metadataContent = @"
-# Script-Based Deployment Configuration
+    'Script-Based Deployment Configuration'
+}
+
+$intuneConfig = @"
+# $header
 # Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
 
 App: $($appDef.name)
-Download URL: $($appDef.download.url)
-Install Args: $($appDef.installer.install_args)
-Registry Name: $($appDef.detect.registry_display_name)
+Mode: $($ctx.Mode)
 Install Behavior: $installBehaviorLabel
 
 # Intune Install Command:
-powershell.exe -ExecutionPolicy Bypass -File generic-install.ps1 -Url "$($appDef.download.url)" -Args "$($appDef.installer.install_args)"
+$($ctx.InstallCommand)
 
 # Intune Uninstall Command:
-powershell.exe -ExecutionPolicy Bypass -File generic-install.ps1 -Uninstall -RegistryName "$($appDef.uninstall.registry_name)"
+$($ctx.UninstallCommand)
 
 # Detection Rule:
-File: $($appDef.detect.file)
-Registry: $($appDef.detect.registry_display_name)
+$($detectLines -join "`n")
 "@
-}
-$metadataContent | Out-File "app/intune-config.txt" -Encoding utf8
+$intuneConfig | Out-File "app/intune-config.txt" -Encoding utf8
 
 # ==========
 # Resolve IntuneWinAppUtil (cached if already extracted)
@@ -123,12 +120,8 @@ $toolPath = Get-IntuneWinAppUtilPath
 # ==========
 # Build intunewin
 # ==========
-Write-Host "Building intunewin (main script: $mainScriptName)..."
-& $toolPath `
-    -c app `
-    -s $mainScriptName `
-    -o output/intunewin `
-    -q
+Write-Host "Building intunewin (main script: $($ctx.MainScriptName))..."
+& $toolPath -c app -s $ctx.MainScriptName -o output/intunewin -q
 
 # ==========
 # Rename intunewin
@@ -136,64 +129,49 @@ Write-Host "Building intunewin (main script: $mainScriptName)..."
 $intunewin = Get-ChildItem output/intunewin/*.intunewin | Select-Object -First 1
 if ($intunewin) {
     $timestamp = Get-Date -Format "yyyyMMdd"
-    $newName = "$($appDef.name)-$timestamp.intunewin"
-    Rename-Item -Path $intunewin.FullName -NewName $newName
+    Rename-Item -Path $intunewin.FullName -NewName "$($appDef.name)-$timestamp.intunewin"
 }
 
 # ==========
-# Copy metadata to output
+# Copy intune-config.txt and write output metadata.txt
 # ==========
 Copy-Item "app/intune-config.txt" "output/intune-config.txt" -Force
 
-# ==========
-# Write output metadata
-# ==========
-if ($isCustomScript) {
-    @"
-app: $($appDef.name)
-type: script_based (custom_script)
-install_script: $mainScriptName
-uninstall_script: $($appDef.uninstall.script)
-detect_file: $($appDef.detect.file)
-install_behavior: $installBehavior
-built_at_utc: $((Get-Date).ToUniversalTime().ToString("o"))
-"@ | Out-File "output/metadata.txt" -Encoding utf8
+$metaLines = @(
+    "app: $($appDef.name)"
+    "type: $(if ($ctx.Mode -eq 'custom_script') { 'script_based (custom_script)' } else { 'script_based' })"
+    "install_behavior: $installBehavior"
+    "install_command: $($ctx.InstallCommand)"
+    "uninstall_command: $($ctx.UninstallCommand)"
+    "detect_file: $($ctx.DetectFile)"
+)
+if ($ctx.Mode -eq 'custom_script') {
+    $metaLines += "install_script: $($ctx.MainScriptName)"
+    if ($ctx.UninstallScript) { $metaLines += "uninstall_script: $($ctx.UninstallScript)" }
 } else {
-    @"
-app: $($appDef.name)
-type: script_based
-download_url: $($appDef.download.url)
-install_args: $($appDef.installer.install_args)
-registry_name: $($appDef.detect.registry_display_name)
-install_behavior: $installBehavior
-built_at_utc: $((Get-Date).ToUniversalTime().ToString("o"))
-"@ | Out-File "output/metadata.txt" -Encoding utf8
+    $metaLines += "download_url: $($ctx.DownloadUrl)"
+    $metaLines += "install_args: $($ctx.InstallArgs)"
+    $metaLines += "registry_name: $($ctx.DetectRegistry)"
 }
+$metaLines += "built_at_utc: $((Get-Date).ToUniversalTime().ToString('o'))"
+$metaLines -join "`n" | Out-File "output/metadata.txt" -Encoding utf8
 
+# ==========
+# Console output (intune-config.txt と同内容を見やすく表示)
+# ==========
 Write-Host "Build completed successfully"
 Write-Host ""
 Write-Host "=== Intune Configuration ===" -ForegroundColor Cyan
 Write-Host "Install Behavior:"
 Write-Host "  $installBehaviorLabel"
 Write-Host ""
-if ($isCustomScript) {
-    Write-Host "Install Command:"
-    Write-Host "  powershell.exe -ExecutionPolicy Bypass -File $mainScriptName"
-    Write-Host ""
-    if ($appDef.uninstall.script) {
-        Write-Host "Uninstall Command:"
-        Write-Host "  powershell.exe -ExecutionPolicy Bypass -File $($appDef.uninstall.script)"
-        Write-Host ""
-    }
-    Write-Host "Detection Rule (File):"
-    Write-Host "  Path: $($appDef.detect.file)"
-} else {
-    Write-Host "Install Command:"
-    Write-Host "  powershell.exe -ExecutionPolicy Bypass -File generic-install.ps1 -Url `"$($appDef.download.url)`" -Args `"$($appDef.installer.install_args)`""
-    Write-Host ""
+Write-Host "Install Command:"
+Write-Host "  $($ctx.InstallCommand)"
+Write-Host ""
+if ($ctx.UninstallCommand -ne '(none)') {
     Write-Host "Uninstall Command:"
-    Write-Host "  powershell.exe -ExecutionPolicy Bypass -File generic-install.ps1 -Uninstall -RegistryName `"$($appDef.uninstall.registry_name)`""
+    Write-Host "  $($ctx.UninstallCommand)"
     Write-Host ""
-    Write-Host "Detection Rule (File):"
-    Write-Host "  Path: $($appDef.detect.file)"
 }
+Write-Host "Detection Rule (File):"
+Write-Host "  Path: $($ctx.DetectFile)"

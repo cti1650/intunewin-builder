@@ -140,6 +140,90 @@ function Get-NestedValue {
     return $current
 }
 
+$script:InstallerHeaderMagic = @{
+    'msi'  = 'D0CF11E0'   # Compound Document File (MSI)
+    'exe'  = '4D5A*'      # PE (DOS MZ); first 2 bytes only
+    'msix' = '504B0304'   # ZIP archive (MSIX)
+}
+
+function Test-InstallerHeader {
+    <#
+    .SYNOPSIS
+      ファイル先頭 4 バイトのマジックナンバーが指定タイプと整合するか判定する。
+    .OUTPUTS
+      [bool] 整合 = $true / 不整合 = $false / 未知タイプ = $true (passthrough)
+    #>
+    param(
+        [Parameter(Mandatory)][string]$FilePath,
+        [Parameter(Mandatory)][string]$Type
+    )
+    $expected = $script:InstallerHeaderMagic[$Type.ToLower()]
+    if (-not $expected) { return $true }
+
+    $bytes = [System.IO.File]::ReadAllBytes($FilePath)[0..3]
+    $header = [BitConverter]::ToString($bytes) -replace '-', ''
+    if ($expected -match '\*') { return $header -like $expected }
+    return $header -eq $expected
+}
+
+function Get-InstallerVersion {
+    <#
+    .SYNOPSIS
+      MSI / EXE / MSIX のバージョン文字列を取り出す。失敗時は $null。
+
+    .DESCRIPTION
+      - .exe : Get-Item の VersionInfo.FileVersion
+      - .msi : WindowsInstaller COM で Property テーブル ProductVersion を読む
+      - .msix: ZIP として開き AppxManifest.xml の Package/Identity/@Version を読む
+    #>
+    param([Parameter(Mandatory)][string]$FilePath)
+
+    $ext = [System.IO.Path]::GetExtension($FilePath).ToLower()
+    switch ($ext) {
+        '.exe' {
+            return (Get-Item $FilePath).VersionInfo.FileVersion
+        }
+        '.msi' {
+            try {
+                $msi  = New-Object -ComObject WindowsInstaller.Installer
+                $db   = $msi.GetType().InvokeMember('OpenDatabase', 'InvokeMethod', $null, $msi, @($FilePath, 0))
+                $view = $db.GetType().InvokeMember('OpenView', 'InvokeMethod', $null, $db,
+                    "SELECT Value FROM Property WHERE Property='ProductVersion'")
+                $view.GetType().InvokeMember('Execute', 'InvokeMethod', $null, $view, $null)
+                $record = $view.GetType().InvokeMember('Fetch', 'InvokeMethod', $null, $view, $null)
+                $version = $null
+                if ($record) {
+                    $version = $record.GetType().InvokeMember('StringData', 'GetProperty', $null, $record, 1)
+                }
+                [System.Runtime.Interopservices.Marshal]::ReleaseComObject($msi) | Out-Null
+                return $version
+            } catch {
+                Write-Warning "Could not read MSI version: $_"
+                return $null
+            }
+        }
+        '.msix' {
+            try {
+                Add-Type -AssemblyName System.IO.Compression.FileSystem
+                $zip = [System.IO.Compression.ZipFile]::OpenRead($FilePath)
+                try {
+                    $manifest = $zip.Entries | Where-Object { $_.Name -eq 'AppxManifest.xml' } | Select-Object -First 1
+                    if (-not $manifest) { return $null }
+                    $reader = New-Object System.IO.StreamReader($manifest.Open())
+                    try {
+                        $xml = [xml]$reader.ReadToEnd()
+                        return $xml.Package.Identity.Version
+                    } finally { $reader.Close() }
+                } finally { $zip.Dispose() }
+            } catch {
+                Write-Warning "Could not read MSIX version: $_"
+                return $null
+            }
+        }
+    }
+    return $null
+}
+
 function Expand-EnvPath {
     <#
     .SYNOPSIS
