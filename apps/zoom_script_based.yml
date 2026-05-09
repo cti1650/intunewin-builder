@@ -17,3 +17,6 @@ detect:
 uninstall:
   type: script
   registry_name: "Zoom Workplace"
+
+intune:
+  install_behavior: system

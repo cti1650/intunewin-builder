@@ -17,3 +17,6 @@ detect:
 uninstall:
   type: script
   registry_name: "Mozilla Firefox"
+
+intune:
+  install_behavior: system

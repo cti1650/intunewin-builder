@@ -23,6 +23,7 @@ uninstall:
 # Intune Win32アプリ設定値（参照用）
 # ==========
 intune:
+  install_behavior: system
   install_command: "msiexec /i Firefox-Setup-x64.msi /qn /norestart"
   # registry HKLM\...\Uninstall\Mozilla Firefox の QuietUninstallString を直接利用する形を推奨
   uninstall_command: '"%ProgramFiles%\Mozilla Firefox\uninstall\helper.exe" /S /MaintenanceService=false'

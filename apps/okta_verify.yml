@@ -23,6 +23,7 @@ uninstall:
 # Intune Win32アプリ設定値（参照用）
 # ==========
 intune:
+  install_behavior: system
   install_command: "OktaVerifySetup.exe /quiet /norestart"
   # WiX Bootstrapper形式のためアンインストーラーパスにバージョン固有GUIDが含まれる。
   # レジストリのUninstallStringを動的に取得して実行するPowerShellコマンドを使用する。

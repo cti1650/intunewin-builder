@@ -17,3 +17,6 @@ detect:
 uninstall:
   type: script
   registry_name: "Cloudflare WARP"
+
+intune:
+  install_behavior: system

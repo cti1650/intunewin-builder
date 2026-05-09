@@ -1,6 +1,6 @@
-# NOTE: oviceはユーザー固有の%LocalAppData%にインストールされるため、
-#       このYAML定義はGitHub Actions（runneradmin）での動作検証用です。
-#       Intune展開時は ovice_script_based.yml を使用してください。
+# NOTE: ovice は per-user installer (NSIS) で %LocalAppData%\Programs\ovice 配下に
+#       インストールされる。verify-installer は Expand-EnvPath で展開して runneradmin
+#       のローカルパスに解決する。Intune 配信時は install_behavior: user を選択。
 name: ovice
 
 download:
@@ -12,10 +12,13 @@ installer:
   install_args: "/S"
 
 detect:
-  file: "C:\\Users\\runneradmin\\AppData\\Local\\Programs\\ovice\\ovice.exe"
+  file: "%LocalAppData%\\Programs\\ovice\\ovice.exe"
   registry_display_name: "ovice"
 
 uninstall:
   type: exe
-  path: "C:\\Users\\runneradmin\\AppData\\Local\\Programs\\ovice\\Uninstall ovice.exe"
+  path: "%LocalAppData%\\Programs\\ovice\\Uninstall ovice.exe"
   args: "/S"
+
+intune:
+  install_behavior: user

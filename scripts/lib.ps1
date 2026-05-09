@@ -140,6 +140,21 @@ function Get-NestedValue {
     return $current
 }
 
+function Expand-EnvPath {
+    <#
+    .SYNOPSIS
+      detect.file / detect.path / detect.appx_name 等に含まれる
+      %LocalAppData% / %ProgramFiles% 等の環境変数を現在のプロセスで展開して返す。
+
+    .DESCRIPTION
+      install_behavior: user のアプリでは detect.file が %LocalAppData% プレフィックス
+      で書かれることが多い。verify-installer の Test-Path 等で実パスへ展開するための薄い wrapper。
+    #>
+    param([string]$Path)
+    if (-not $Path) { return $Path }
+    return [System.Environment]::ExpandEnvironmentVariables($Path)
+}
+
 function Find-RegistryUninstallEntry {
     <#
     .SYNOPSIS

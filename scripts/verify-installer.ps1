@@ -16,6 +16,7 @@ $summary = [ordered]@{
     DisplayName       = ""
     InstallPath       = ""
     InstalledVersion  = ""
+    InstallBehavior   = ""
     OSArchitecture    = if ([Environment]::Is64BitOperatingSystem) { "64-bit" } else { "32-bit" }
     AppArchitecture   = "Unknown"
     ArchCheck         = "Not Checked"
@@ -228,6 +229,7 @@ try {
     $isScriptBased = $appDef.script_based -eq $true
     $type = $appDef.installer.type
     $summary.InstallerType = if ($isScriptBased) { "script" } else { $type }
+    $summary.InstallBehavior = $appDef.intune.install_behavior
 
     # Snapshot before
     $snapshotBefore = Get-InstalledAppsSnapshot
@@ -390,15 +392,16 @@ try {
         else { Write-Warning "Appx detection: Failed (not found: $searchName)" }
     }
 
-    # ファイル検出
+    # ファイル検出 (%LocalAppData% 等の環境変数を展開)
     if ($appDef.detect.file) {
-        $summary.InstallPath = $appDef.detect.file
-        if (Test-Path $appDef.detect.file) {
+        $detectFile = Expand-EnvPath $appDef.detect.file
+        $summary.InstallPath = $detectFile
+        if (Test-Path $detectFile) {
             $detectionResults["File"] = $true
             Write-Host "File detection: Pass"
 
             # バージョン取得 (FileVersion → 空ならレジストリ DisplayVersion フォールバック)
-            $fileInfo = Get-Item $appDef.detect.file
+            $fileInfo = Get-Item $detectFile
             $installedVersion = $fileInfo.VersionInfo.FileVersion
             if (-not $installedVersion -and $appDef.detect.registry_display_name) {
                 $entry = Find-RegistryUninstallEntry -DisplayName $appDef.detect.registry_display_name
@@ -435,13 +438,13 @@ try {
                 $summary.VersionCheck = "Not Required"
             }
         } else {
-            Write-Warning "File detection: Failed (not found: $($appDef.detect.file))"
+            Write-Warning "File detection: Failed (not found: $detectFile)"
             $detectionResults["File"] = $false
             $summary.VersionCheck = "Skipped (File not found)"
         }
 
         # インストール場所チェック（x64/x86両方を確認）
-        $detectFilePath = $appDef.detect.file
+        $detectFilePath = $detectFile
         $x64Path = $null
         $x86Path = $null
         $x64Exists = $false
@@ -532,10 +535,11 @@ try {
              }
         }
         
-        # 3. ファイルの残骸チェック
+        # 3. ファイルの残骸チェック (%LocalAppData% 等は展開して比較)
         if ($appDef.detect.file) {
-             if (Test-Path $appDef.detect.file) {
-                 Write-Host "Cleanup Check Failed: File still exists at $($appDef.detect.file)"
+             $detectFile = Expand-EnvPath $appDef.detect.file
+             if (Test-Path $detectFile) {
+                 Write-Host "Cleanup Check Failed: File still exists at $detectFile"
                  $clean = $false
              }
         }

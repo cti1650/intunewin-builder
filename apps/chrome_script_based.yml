@@ -19,3 +19,6 @@ detect:
 uninstall:
   type: script
   registry_name: "Google Chrome"
+
+intune:
+  install_behavior: system

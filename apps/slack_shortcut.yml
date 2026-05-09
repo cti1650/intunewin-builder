@@ -1,5 +1,5 @@
 # NOTE: Slack本体のインストールは行わず、Public Desktopにショートカットだけ作る。
-#       本体は apps/slack.yml (MSI) で別途配布する想定。
+#       本体は Microsoft Store 配信 (Intune の "Microsoft Store app (new)") で配布する想定。
 name: slack_shortcut
 
 script_based: true
@@ -20,6 +20,8 @@ detect:
 # Intune Win32アプリ設定値（参照用）
 # ==========
 intune:
+  # Public Desktop (C:\Users\Public\Desktop) への書き込みは SYSTEM 権限が必要なため system
+  install_behavior: system
   install_command: "powershell.exe -ExecutionPolicy Bypass -File install.ps1"
   uninstall_command: "powershell.exe -ExecutionPolicy Bypass -File uninstall.ps1"
   detection:

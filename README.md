@@ -27,17 +27,20 @@ Intune 自体はブラックボックスとして扱い、
 
 現在は Windows11が32bit CPUのサポートをしていないため **全て 64-bit 版** での統一する。
 
-| アプリ | インストーラ | 検出方法 | 備考 |
-|--------|-------------|----------|------|
-| **Google Chrome** | MSI (64-bit) | ファイルパス | Enterprise版 |
-| **Mozilla Firefox** | MSI (64-bit) | ファイルパス | 日本語版 (`lang=ja`) |
-| **Cloudflare WARP** | MSI (64-bit) | レジストリ | 表示名検出 |
-| **Zoom Workplace** | MSI (64-bit) | レジストリ | 表示名検出 / 自動更新ON |
-| **AWS CLI v2** | MSI (64-bit) | ファイルパス | クラウドエンジニア向け CLI |
-| **Gyazo** | EXE (InnoSetup) | ファイルパス | スクリーンショット共有ツール |
-| **ovice** | EXE (NSIS) | レジストリ | ユーザー固有パス ※script_based推奨 |
-| **Company Portal Shortcut** | カスタム PowerShell | ファイルパス (.lnk) | Public Desktop にポータルサイトのショートカットを作成 |
-| **Slack Shortcut** | カスタム PowerShell | ファイルパス (.lnk) | Public Desktop に Microsoft Store 版 Slack へのショートカットを作成 |
+| アプリ | インストーラ | Install Behavior | 検出方法 | 備考 |
+|--------|-------------|---|----------|------|
+| **Google Chrome** | MSI (64-bit) | system | ファイルパス | Enterprise版 |
+| **Mozilla Firefox** | MSI (64-bit) | system | ファイルパス | 日本語版 (`lang=ja`) |
+| **Cloudflare WARP** | MSI (64-bit) | system | レジストリ | 表示名検出 |
+| **Zoom Workplace** | MSI (64-bit) | system | レジストリ | 表示名検出 / 自動更新ON |
+| **AWS CLI v2** | MSI (64-bit) | system | ファイルパス | クラウドエンジニア向け CLI |
+| **Gyazo** | EXE (InnoSetup) | system | ファイルパス | スクリーンショット共有ツール |
+| **ovice** | EXE (NSIS) | **user** | レジストリ | per-user installer (`%LocalAppData%\Programs\ovice`) |
+| **Okta Verify** | EXE (Bootstrapper) | system | ファイルパス | URL に `YOUR_ORGANIZATION` placeholder。手動 dispatch 専用 |
+| **Company Portal Shortcut** | カスタム PowerShell | system | ファイルパス (.lnk) | Public Desktop にポータルサイトのショートカットを作成 |
+| **Slack Shortcut** | カスタム PowerShell | system | ファイルパス (.lnk) | Public Desktop に Microsoft Store 版 Slack へのショートカットを作成 |
+
+`Install Behavior` は Intune の Win32 App 設定 "Install behavior" にそのまま入れる値 (`system` または `user`)。[apps/*.yml](apps/) の `intune.install_behavior` フィールドが情報源。
 
 > **Slack 本体は Win32App 化しない方針**
 > Slack 公式が [2025-09-15 に MSI インストーラを廃止](https://slack.com/help/articles/4426294050451-Slack-feature-and-plan-retirements) し、後継として MSIX (および Microsoft Store 配信) のみを案内しているため、Slack 本体は **Intune の "Microsoft Store app (new)" 機能** で配信することを推奨する。本リポジトリはショートカット (`slack_shortcut`) のみ提供する。
@@ -71,11 +74,19 @@ detect:
   appx_name: パッケージ名（MSIX用）
 
 uninstall:
-  type: msi | exe | msix
+  type: msi | exe | msix | registry_string | script
   args: アンインストール引数（{product_code}で自動置換）
   path: アンインストーラパス（EXE用、{version}で自動置換）
   package_name: パッケージ名（MSIX用）
+
+intune:
+  install_behavior: system | user   # 必須。Intune の "Install behavior" にそのまま入れる値
+  install_command: ...               # 参照用 (operator が Intune UI に貼る)
+  uninstall_command: ...             # 参照用
+  detection: ...                     # 参照用
 ```
+
+`detect.file` / `uninstall.path` には `%LocalAppData%` 等の環境変数を埋め込める (verify-installer は実行時に展開する)。`install_behavior: user` のアプリは原則 `%LocalAppData%` プレースホルダを使う ([apps/ovice.yml](apps/ovice.yml) 参照)。
 
 ## 検証フロー
 
