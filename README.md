@@ -30,9 +30,11 @@ Intune 自体はブラックボックスとして扱い、
 | アプリ | インストーラ | 検出方法 | 備考 |
 |--------|-------------|----------|------|
 | **Google Chrome** | MSI (64-bit) | ファイルパス | Enterprise版 |
+| **Mozilla Firefox** | MSI (64-bit) | ファイルパス | 日本語版 (`lang=ja`) |
 | **Slack** | MSI (64-bit) | ファイルパス | Machine-Wide Installer |
 | **Cloudflare WARP** | MSI (64-bit) | レジストリ | 表示名検出 |
 | **Zoom Workplace** | MSI (64-bit) | レジストリ | 表示名検出 / 自動更新ON |
+| **AWS CLI v2** | MSI (64-bit) | ファイルパス | クラウドエンジニア向け CLI |
 | **Gyazo** | EXE (InnoSetup) | ファイルパス | スクリーンショット共有ツール |
 | **ovice** | EXE (NSIS) | レジストリ | ユーザー固有パス ※script_based推奨 |
 | **Company Portal Shortcut** | カスタム PowerShell | ファイルパス (.lnk) | Public Desktop にポータルサイトのショートカットを作成 |

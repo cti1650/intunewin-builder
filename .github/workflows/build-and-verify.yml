@@ -8,7 +8,9 @@ on:
         required: true
         type: choice
         options:
+          - awscli_v2
           - chrome
+          - firefox
           - gyazo
           - okta_verify
           - ovice
