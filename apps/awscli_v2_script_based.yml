@@ -11,7 +11,7 @@ installer:
 
 detect:
   file: "C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe"
-  version: "2.0"
+  version: "2.34.45"
   registry_display_name: "AWS Command Line Interface v2"
 
 uninstall:
