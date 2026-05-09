@@ -103,11 +103,17 @@ function Invoke-RegistryStringUninstall {
     } else {
         $exe = $uninstallCmd; $uArgs = ""
     }
-    $proc = if ($uArgs) {
-        Start-Process -FilePath $exe -ArgumentList $uArgs -PassThru -Wait
-    } else {
-        Start-Process -FilePath $exe -PassThru -Wait
+
+    # UninstallString は /S 等のサイレントフラグを持たない場合がある (例: Firefox MSI は
+    # QuietUninstallString を書き込まず、UninstallString が引数なしの helper.exe のみ →
+    # UI 起動 → ハング → workflow timeout)。args が空のときに限り /S を補完する。
+    # generic-install.ps1 のアンインストール経路と同じ補完ロジック。
+    if (-not $uArgs) {
+        Write-Host "Augmenting empty UninstallString args with /S (silent uninstall)"
+        $uArgs = "/S"
     }
+
+    $proc = Start-Process -FilePath $exe -ArgumentList $uArgs -PassThru -Wait
     Write-Host "Uninstall exit code: $($proc.ExitCode)"
     return Format-ExitCodeStatus $proc.ExitCode
 }
