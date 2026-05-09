@@ -11,7 +11,7 @@ jobs:
     outputs:
       app_matrix: ${{ steps.set-matrix.outputs.app_matrix }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install powershell-yaml
         shell: pwsh
         run: |
