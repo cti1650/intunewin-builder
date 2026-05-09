@@ -486,6 +486,22 @@ try {
         }
     }
 
+    # detect.file を持たないアプリ (例: ovice_script_based) でも summary を埋めるため、
+    # registry_display_name のエントリから DisplayVersion / InstallLocation を補完する。
+    if ($appDef.detect.registry_display_name -and (-not $summary.InstalledVersion -or -not $summary.InstallPath)) {
+        $entry = Find-RegistryUninstallEntry -DisplayName $appDef.detect.registry_display_name
+        if ($entry) {
+            if (-not $summary.InstalledVersion -and $entry.DisplayVersion) {
+                $summary.InstalledVersion = $entry.DisplayVersion
+                Write-Host "InstalledVersion source: registry DisplayVersion ($($entry.DisplayVersion))"
+            }
+            if (-not $summary.InstallPath -and $entry.InstallLocation) {
+                $summary.InstallPath = $entry.InstallLocation
+                Write-Host "InstallPath source: registry InstallLocation ($($entry.InstallLocation))"
+            }
+        }
+    }
+
     # 全ての条件がマッチしたか確認
     $allPassed = ($detectionResults.Count -gt 0) -and ($detectionResults.Values | Where-Object { $_ -eq $false }).Count -eq 0
 
