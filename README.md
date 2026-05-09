@@ -31,7 +31,6 @@ Intune 自体はブラックボックスとして扱い、
 |--------|-------------|----------|------|
 | **Google Chrome** | MSI (64-bit) | ファイルパス | Enterprise版 |
 | **Mozilla Firefox** | MSI (64-bit) | ファイルパス | 日本語版 (`lang=ja`) |
-| **Slack** | MSI (64-bit) | ファイルパス | Machine-Wide Installer |
 | **Cloudflare WARP** | MSI (64-bit) | レジストリ | 表示名検出 |
 | **Zoom Workplace** | MSI (64-bit) | レジストリ | 表示名検出 / 自動更新ON |
 | **AWS CLI v2** | MSI (64-bit) | ファイルパス | クラウドエンジニア向け CLI |
@@ -39,6 +38,9 @@ Intune 自体はブラックボックスとして扱い、
 | **ovice** | EXE (NSIS) | レジストリ | ユーザー固有パス ※script_based推奨 |
 | **Company Portal Shortcut** | カスタム PowerShell | ファイルパス (.lnk) | Public Desktop にポータルサイトのショートカットを作成 |
 | **Slack Shortcut** | カスタム PowerShell | ファイルパス (.lnk) | Public Desktop に Microsoft Store 版 Slack へのショートカットを作成 |
+
+> **Slack 本体は Win32App 化しない方針**
+> Slack 公式が [2025-09-15 に MSI インストーラを廃止](https://slack.com/help/articles/4426294050451-Slack-feature-and-plan-retirements) し、後継として MSIX (および Microsoft Store 配信) のみを案内しているため、Slack 本体は **Intune の "Microsoft Store app (new)" 機能** で配信することを推奨する。本リポジトリはショートカット (`slack_shortcut`) のみ提供する。
 
 ## アプリ定義ファイル (YAML)
 
