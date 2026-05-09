@@ -1,0 +1,61 @@
+name: lint
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'apps/**'
+      - 'scripts/**'
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '.githooks/**'
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'scripts/**'
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '.githooks/**'
+
+jobs:
+  ps-syntax:
+    name: PowerShell syntax
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse all .ps1
+        shell: pwsh
+        run: pwsh -File scripts/check-syntax.ps1 -Path scripts, .githooks
+
+  apps-schema:
+    name: apps/*.yml schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Schema check
+        shell: pwsh
+        run: pwsh -File scripts/check-apps-schema.ps1
+
+  choice-list:
+    name: workflow choice list
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Choice list consistency
+        shell: pwsh
+        run: pwsh -File scripts/check-choice-list.ps1
+
+  actionlint:
+    name: actionlint
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download actionlint
+        id: actionlint
+        run: bash <(curl --silent --show-error --fail https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+      - name: Run actionlint
+        run: ${{ steps.actionlint.outputs.executable }} -color

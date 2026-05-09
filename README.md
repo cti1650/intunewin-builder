@@ -139,6 +139,25 @@ stage された `*.ps1` のみを構文チェックする pre-commit hook を有
 
 `.github/dependabot.yml` で github-actions を週次監視。新版が出ると自動で PR が立つ。
 
+### Lint CI (push / PR トリガー)
+
+`apps/`、`scripts/`、`.github/` 配下が変更されると `.github/workflows/lint.yml` が起動し、以下を ubuntu-latest で並列実行する (各 1 分以内):
+
+| ジョブ | チェック内容 |
+|---|---|
+| **ps-syntax** | `scripts/check-syntax.ps1` で全 `*.ps1` を AST パース |
+| **apps-schema** | `scripts/check-apps-schema.ps1` で `apps/*.yml` の必須フィールド・許可された type 値・name 一致を検証 |
+| **choice-list** | `scripts/check-choice-list.ps1` で `build-and-verify.yml` の choice options と `apps/*.yml` の集合一致を検証 |
+| **actionlint** | workflow YAML の構文・shell コマンドを [actionlint](https://github.com/rhysd/actionlint) で検査 |
+
+ローカルで個別に実行する場合:
+
+```bash
+pwsh -File scripts/check-syntax.ps1
+pwsh -File scripts/check-apps-schema.ps1
+pwsh -File scripts/check-choice-list.ps1
+```
+
 ## 補足
 
 このリポジトリは
