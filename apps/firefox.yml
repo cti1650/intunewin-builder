@@ -1,0 +1,29 @@
+name: firefox
+
+download:
+  url: https://download.mozilla.org/?product=firefox-msi-latest-ssl&os=win64&lang=ja
+  file: Firefox-Setup-x64.msi
+
+installer:
+  type: msi
+  install_args: "/i {installer} /qn /norestart"
+
+detect:
+  file: "C:\\Program Files\\Mozilla Firefox\\firefox.exe"
+  registry_display_name: "Mozilla Firefox"
+
+uninstall:
+  type: msi
+  args: "/x {product_code} /qn"
+
+# ==========
+# Intune Win32アプリ設定値（参照用）
+# ==========
+intune:
+  install_command: "msiexec /i Firefox-Setup-x64.msi /qn /norestart"
+  # ProductCodeはMSIのプロパティまたは検証時のレジストリから確認
+  uninstall_command: 'msiexec /x "{ProductCode}" /qn'
+  detection:
+    type: file
+    path: "C:\\Program Files\\Mozilla Firefox"
+    file: "firefox.exe"

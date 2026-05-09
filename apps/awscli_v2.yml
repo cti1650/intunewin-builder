@@ -1,0 +1,29 @@
+name: awscli_v2
+
+download:
+  url: https://awscli.amazonaws.com/AWSCLIV2.msi
+  file: AWSCLIV2.msi
+
+installer:
+  type: msi
+  install_args: "/i {installer} /qn /norestart"
+
+detect:
+  file: "C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe"
+  registry_display_name: "AWS Command Line Interface v2"
+
+uninstall:
+  type: msi
+  args: "/x {product_code} /qn"
+
+# ==========
+# Intune Win32アプリ設定値（参照用）
+# ==========
+intune:
+  install_command: "msiexec /i AWSCLIV2.msi /qn /norestart"
+  # ProductCodeはMSIのプロパティまたは検証時のレジストリから確認
+  uninstall_command: 'msiexec /x "{ProductCode}" /qn'
+  detection:
+    type: file
+    path: "C:\\Program Files\\Amazon\\AWSCLIV2"
+    file: "aws.exe"
