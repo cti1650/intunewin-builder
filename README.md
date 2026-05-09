@@ -104,6 +104,41 @@ uninstall:
 1. `build-and-verify-intunewin-apps` を実行
 2. `apps/` 以下の全アプリが並列で検証される
 
+## 開発環境セットアップ (任意)
+
+### 前提
+- [PowerShell Core (pwsh)](https://learn.microsoft.com/powershell/scripting/install/) — macOS は `brew install --cask powershell`
+
+### PowerShell 構文チェック (ローカル)
+
+```bash
+# 全 .ps1 を AST パーサで検査 (pwsh 未導入なら案内表示)
+./scripts/dev-check.sh
+```
+
+`scripts/check-syntax.ps1` 単体で pwsh から呼び出すこともできる:
+
+```bash
+pwsh -File scripts/check-syntax.ps1
+pwsh -File scripts/check-syntax.ps1 -Files scripts/build-intunewin.ps1
+```
+
+### git pre-commit hook (オプトイン)
+
+stage された `*.ps1` のみを構文チェックする pre-commit hook を有効化できる:
+
+```bash
+./scripts/install-hooks.sh    # core.hooksPath を .githooks/ に設定
+```
+
+- バイパス: `git commit --no-verify`
+- 解除: `git config --unset core.hooksPath`
+- pwsh 未導入時は警告のみで通す (CI 側で最終ガード前提)
+
+### Action バージョン更新
+
+`.github/dependabot.yml` で github-actions を週次監視。新版が出ると自動で PR が立つ。
+
 ## 補足
 
 このリポジトリは
