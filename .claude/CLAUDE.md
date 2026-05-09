@@ -1,0 +1,97 @@
+# CLAUDE.md
+
+このファイルは Claude Code がこのリポジトリで作業するときに常時参照するプロジェクト固有のルール集。
+
+## このリポジトリは何か
+
+GitHub Actions 上で Windows アプリのインストーラを取得し、Microsoft Intune Win32App 配信用の `.intunewin` を生成・事前検証する仕組み。Intune そのものはブラックボックスとして扱い、「Intune に渡す材料の品質」だけを責任範囲とする。
+
+主な構成:
+
+- [apps/](../apps/) — アプリ定義 YAML (`<name>.yml` と `<name>_script_based.yml` のペアが基本)
+- [scripts/](../scripts/) — ビルド/検証/lint 用 PowerShell + bash ヘルパ
+- [.github/workflows/](../.github/workflows/) — Win 実機での build-and-verify 系 + ubuntu の lint
+- [.githooks/](../.githooks/) — オプトイン pre-commit hook (PowerShell 構文チェック)
+
+## アプリ追加時のフロー
+
+新しいアプリを追加するときは [add-intune-app](skills/add-intune-app/SKILL.md) スキルの手順に従う。
+
+候補アプリの調査が必要な場合は [intune-app-researcher](agents/intune-app-researcher.md) サブエージェントを使う。
+
+## アプリ定義スキーマの主要ルール
+
+詳細は [README.md](../README.md) の「アプリ定義ファイル (YAML)」セクション参照。lint で機械的に検証されるルールは以下:
+
+| フィールド | 許可される値 |
+|---|---|
+| `installer.type` | `msi`, `exe`, `msix`, `script` |
+| `uninstall.type` | `msi`, `exe`, `msix`, `script`, `registry_string` |
+
+加えて:
+
+- `name` フィールドはファイル名 (拡張子除く) と一致させる
+- `custom_script: true` でない場合は `download.url` 必須
+- `script_based: true` でない場合は `download.file` 必須
+- `detect` ブロックは必須
+
+## 命名規則
+
+通常版とスクリプト版の **両方を作るのが基本**:
+
+| 用途 | ファイル名 |
+|---|---|
+| 通常版 (ビルド時インストーラ同梱) | `apps/<name>.yml` |
+| script_based 版 (端末側で URL から DL) | `apps/<name>_script_based.yml` |
+| ショートカット系 (DL なし、PS1 同梱) | `apps/<name>_shortcut.yml` (`custom_script: true`) |
+
+`build-and-verify.yml` の `workflow_dispatch.inputs.app.options` に **通常版だけ** をアルファベット順で追加する。lint の `choice-list` ジョブが整合性を保証する。
+
+## URL 固定性の分類 (採用判断の基準)
+
+| 等級 | 例 | 判断 |
+|---|---|---|
+| **A 級** (latest 固定 URL) | `aka.ms/...`、`download.mozilla.org/?product=...-latest-ssl`、`awscli.amazonaws.com/AWSCLIV2.msi` | 通常版で採用 |
+| **B 級** (GitHub Releases latest API) | `github.com/owner/repo/releases/latest/download/<asset-with-version>` | script_based で採用 |
+| **C 級** (バージョン入り URL のみ) | `https://example.com/foo-1.2.3.exe` | **基本不採用**。どうしても必要なら script_based + クローラ実装 |
+
+URL HEAD で 200 が返るかは PR 前に手元で `curl -sIL <url>` で必ず確認する。SourceForge backed の URL (例: WinSCP) は HEAD が HTML mirror page を返すため A 級と誤認しやすい。実体バイナリかは `Content-Type` と `Content-Length` で判定する。
+
+## やってはいけないこと
+
+- **Microsoft Store で配布されているアプリを Win32App 化しない**。Intune の Microsoft Store アプリ配信機能を使う方が筋が良い (例: 1Password、LINE WORKS、Chatwork、Discord 等)
+- **per-user installer (Squirrel 系) を通常版で採用しない**。SYSTEM コンテキストで詰む。Discord、GitHub Desktop、Postman Agent 等が該当
+- **Bootstrapper 形式のインストーラ** (Teams new、gcloud SDK 等) は完結しないため、CI の build-and-verify で安定しないことがある。採用するなら script_based 経由を推奨
+- **商用ライセンス必須のアプリ** (Docker Desktop の大企業利用、TeamViewer、AnyDesk の業務利用 等) を無断で追加しない
+
+## Lint CI (push / PR で自動実行)
+
+`.github/workflows/lint.yml` が ubuntu-latest で 4 ジョブ並列、合計 1 分以内:
+
+| ジョブ | 内容 |
+|---|---|
+| ps-syntax | `scripts/check-syntax.ps1` で全 `*.ps1` を AST パース |
+| apps-schema | `scripts/check-apps-schema.ps1` で apps/*.yml のスキーマ検証 |
+| choice-list | `scripts/check-choice-list.ps1` で workflow choice の整合性検証 |
+| actionlint | workflow YAML の lint |
+
+`apps/`、`scripts/`、`.github/`、`.githooks/` 配下の変更でトリガーされる。**lint を通せない PR はマージしない**。
+
+## ローカルでの確認コマンド
+
+PowerShell Core (`pwsh`) が必要。macOS は `brew install --cask powershell`。
+
+```bash
+./scripts/dev-check.sh                       # *.ps1 構文チェック
+pwsh -File scripts/check-apps-schema.ps1     # apps/*.yml スキーマ検証
+pwsh -File scripts/check-choice-list.ps1     # choice options 整合性
+./scripts/install-hooks.sh                    # オプトイン pre-commit hook を有効化
+```
+
+## 依存追従
+
+`actions/checkout` 等の GitHub Actions バージョン更新は Dependabot (`.github/dependabot.yml`) が週次で grouped PR を作る。これらは **lint が通れば原則そのまま merge** で良い。
+
+## コミット規約
+
+`feat:`, `fix:`, `chore:`, `ci:`, `docs:` の prefix を付ける。日本語本文 OK。`#PR番号` は GitHub が自動付与するので手動で入れない。
