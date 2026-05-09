@@ -18,15 +18,22 @@ jobs:
           Set-PSRepository PSGallery -InstallationPolicy Trusted
           Install-Module powershell-yaml -Scope CurrentUser -Force
 
-      - name: Discover app definitions (non-script_based only)
+      - name: Discover app definitions (non-script_based, no input placeholders)
         id: set-matrix
         shell: pwsh
         run: |
-          # script_based: true のYAMLを除外（ファイル名規約とYAML内容の両方をチェック）
+          # 対象から外す条件:
+          # 1. ファイル名末尾が _script_based / YAML 内 script_based: true (script_based-verify-apps の管轄)
+          # 2. download.url が YOUR_* プレースホルダを含む (例: okta_verify の YOUR_ORGANIZATION)
+          #    手動 workflow_dispatch で Organization を渡せば動くが auto matrix では入力不能
           $apps = Get-ChildItem -Path "apps" -Filter "*.yml" | ForEach-Object {
             if ($_.BaseName -match "_script_based$") { return }
             $def = Get-Content $_.FullName | ConvertFrom-Yaml
             if ($def.script_based -eq $true) { return }
+            if ($def.download.url -and $def.download.url -match 'YOUR_[A-Z_]+') {
+              Write-Host "Skipping $($_.BaseName): URL contains placeholder"
+              return
+            }
             $_.BaseName
           }
           $json = ConvertTo-Json -Compress @($apps)
