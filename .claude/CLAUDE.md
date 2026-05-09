@@ -13,7 +13,7 @@ GitHub Actions 上で Windows アプリのインストーラを取得し、Micro
 - [.github/workflows/](../.github/workflows/) — Win 実機での build-and-verify 系 + ubuntu の lint
 - [.githooks/](../.githooks/) — オプトイン pre-commit hook (PowerShell 構文チェック)
 
-## 利用可能な Skill / Agent / Command
+## 利用可能な Skill / Agent
 
 このリポジトリでよく発生する作業は専用の Claude Code 設定で標準化されている。**該当する依頼が来たら必ずこれらを起動すること**:
 
@@ -21,11 +21,11 @@ GitHub Actions 上で Windows アプリのインストーラを取得し、Micro
 |---|---|---|
 | skill | [add-intune-app](skills/add-intune-app/SKILL.md) | 「アプリを追加して」「<name> を apps に入れて」等。URL検証 → YAML対生成 → choice options 更新 → README → PR まで一貫処理 |
 | skill | [debug-build-failure](skills/debug-build-failure/SKILL.md) | 「ビルドが失敗した」「インストールが落ちる」「検出が効かない」等。失敗段階別の対処手順を提供 |
+| skill | [check-url](skills/check-url/SKILL.md) | `/check-url <url>` または「URL を A/B/C で判定して」等。curl HEAD で URL を検証、A/B/C 級と推奨採用方式を返す |
 | agent | [intune-app-researcher](agents/intune-app-researcher.md) | 候補アプリの URL/install_args/サイズ/ライセンスを一次情報で裏取り、A/B/C 級と採用判定を返す |
 | agent | [intune-build-log-analyzer](agents/intune-build-log-analyzer.md) | workflow run URL を渡して artifact ログを取得、失敗根本原因を切り分け |
-| command | `/check-url <url>` | curl HEAD で URL を検証、A/B/C 級と推奨採用方式を 1 コマンドで返す |
 
-依頼内容に応じて適切な skill / agent を起動する。リサーチは agent に、手続きは skill に、ワンショット検証は command に分ける。
+依頼内容に応じて適切な skill / agent を起動する。リサーチ深掘りは agent、手続き再現は skill。Skills は `/<skill-name>` で明示的に呼び出すことも description に基づいて自動起動することもできる。
 
 ## アプリ定義スキーマの主要ルール
 
