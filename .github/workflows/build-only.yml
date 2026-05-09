@@ -12,7 +12,6 @@ on:
           - gyazo
           - okta_verify
           - ovice
-          - slack
           - warp
           - zoom
       organization:
