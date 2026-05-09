@@ -18,14 +18,21 @@ jobs:
           Set-PSRepository PSGallery -InstallationPolicy Trusted
           Install-Module powershell-yaml -Scope CurrentUser -Force
 
-      - name: Discover script_based app definitions
+      - name: Discover script_based app definitions (no input placeholders)
         id: set-matrix
         shell: pwsh
         run: |
-          # script_based: true を含むYAMLを抽出（ファイル名規約に依存しない）
+          # script_based: true を含むYAMLを抽出（ファイル名規約に依存しない）。
+          # download.url に YOUR_* プレースホルダ (例: YOUR_ORGANIZATION) が残るアプリは
+          # auto matrix では入力できないため除外する (手動 workflow_dispatch では引き続き有効)。
           $apps = Get-ChildItem -Path "apps" -Filter "*.yml" | ForEach-Object {
             $def = Get-Content $_.FullName | ConvertFrom-Yaml
-            if ($def.script_based -eq $true) { $_.BaseName }
+            if ($def.script_based -ne $true) { return }
+            if ($def.download.url -and $def.download.url -match 'YOUR_[A-Z_]+') {
+              Write-Host "Skipping $($_.BaseName): URL contains placeholder"
+              return
+            }
+            $_.BaseName
           }
           $json = ConvertTo-Json -Compress @($apps)
           "app_matrix=$json" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
