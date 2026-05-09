@@ -391,9 +391,16 @@ try {
             $detectionResults["File"] = $true
             Write-Host "File detection: Pass"
 
-            # バージョン取得
+            # バージョン取得 (FileVersion → 空ならレジストリ DisplayVersion フォールバック)
             $fileInfo = Get-Item $appDef.detect.file
             $installedVersion = $fileInfo.VersionInfo.FileVersion
+            if (-not $installedVersion -and $appDef.detect.registry_display_name) {
+                $entry = Find-RegistryUninstallEntry -DisplayName $appDef.detect.registry_display_name
+                if ($entry -and $entry.DisplayVersion) {
+                    $installedVersion = $entry.DisplayVersion
+                    Write-Host "Version source: registry DisplayVersion ($installedVersion)"
+                }
+            }
             if ($installedVersion) {
                 $summary.InstalledVersion = $installedVersion
             }
