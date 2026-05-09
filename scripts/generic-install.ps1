@@ -177,6 +177,19 @@ $tempDir = Join-Path $env:TEMP "generic-install"
 New-Item -ItemType Directory -Path $tempDir -Force | Out-Null
 $installerPath = Join-Path $tempDir $fileName
 
+# CI (GitHub Actions) では Windows Defender real-time scanning が NSIS 系
+# インストーラの子プロセス起動と競合し ACCESS_VIOLATION (0xC0000005) で
+# 落ちることがある (例: Azure northcentralus の windows-2025 runner で
+# ovice-x64-latest-Setup.exe が再現性ありで落ちる)。GH Actions 上に限り
+# Defender 例外を一時付与する。エンドユーザー端末の Defender 設定は触らない。
+if ($env:GITHUB_ACTIONS -eq 'true') {
+    try {
+        Add-MpPreference -ExclusionPath $tempDir -ErrorAction SilentlyContinue
+    } catch {
+        # Defender 未導入 / 権限不足は無視 (Add-MpPreference 自体が無い環境含む)
+    }
+}
+
 Write-Host "Downloading installer from: $Url"
 Write-Host "Saving to: $installerPath"
 
