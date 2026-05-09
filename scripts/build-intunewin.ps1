@@ -6,28 +6,17 @@ param (
 
 $ErrorActionPreference = "Stop"
 
+. "$PSScriptRoot/lib.ps1"
+
 Write-Host "Building intunewin for app: $App"
 
 # ==========
 # Load app definition
 # ==========
-$appDefPath = "apps/$App.yml"
-if (-not (Test-Path $appDefPath)) {
-  throw "App definition not found: $appDefPath"
-}
-
-$appDef = Get-Content $appDefPath | ConvertFrom-Yaml
+$appDef = Get-AppDefinition -App $App -Organization $Organization
 
 $url   = $appDef.download.url
 $setup = $appDef.download.file
-
-# Substitute organization placeholder if provided
-if ($Organization) {
-  $url = $url -replace 'YOUR_ORGANIZATION', $Organization
-}
-if ($url -match 'YOUR_ORGANIZATION') {
-  throw "URL contains 'YOUR_ORGANIZATION' placeholder. Please provide the -Organization parameter (GitHub Actions input: 'organization')."
-}
 
 # ==========
 # Prepare directories
@@ -126,30 +115,9 @@ if (-not $version) {
 Write-Host "Detected version: $version"
 
 # ==========
-# Download IntuneWinAppUtil
+# Resolve IntuneWinAppUtil (cached if already extracted)
 # ==========
-Write-Host "Downloading IntuneWinAppUtil..."
-
-$zipPath  = "IntuneWinAppUtil.zip"
-$toolDir  = "IntuneWinAppUtil"
-$toolName = "IntuneWinAppUtil.exe"
-
-Invoke-WebRequest `
-  -Uri "https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/archive/refs/heads/master.zip" `
-  -OutFile $zipPath
-
-Expand-Archive -Path $zipPath -DestinationPath $toolDir -Force
-
-$toolPath = Get-ChildItem `
-  -Path $toolDir `
-  -Recurse `
-  -Filter $toolName `
-  | Select-Object -First 1 `
-  | Select-Object -ExpandProperty FullName
-
-if (-not $toolPath) {
-  throw "IntuneWinAppUtil.exe not found."
-}
+$toolPath = Get-IntuneWinAppUtilPath
 
 # ==========
 # Build intunewin
