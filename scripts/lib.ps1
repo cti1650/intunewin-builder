@@ -90,6 +90,56 @@ function Get-IntuneWinAppUtilPath {
     return $tool.FullName
 }
 
+function Get-AppFiles {
+    <#
+    .SYNOPSIS
+      apps/*.yml を全件返す (FileInfo[])。
+    #>
+    param([string]$AppsPath = 'apps')
+    return Get-ChildItem -Path $AppsPath -Filter *.yml -File | Sort-Object Name
+}
+
+function Get-ChoiceListAppNames {
+    <#
+    .SYNOPSIS
+      build-and-verify.yml の choice options 用に、通常版だけを抽出した
+      アプリ名 (BaseName) のソート済み配列を返す。
+
+    .DESCRIPTION
+      script_based: true / custom_script: true / ファイル名末尾 _script_based の
+      いずれかに該当するものは除外する。
+    #>
+    param([string]$AppsPath = 'apps')
+    return Get-AppFiles -AppsPath $AppsPath | ForEach-Object {
+        if ($_.BaseName -match '_script_based$') { return }
+        $def = Get-Content $_.FullName -Raw | ConvertFrom-Yaml
+        if ($def.script_based -eq $true) { return }
+        if ($def.custom_script -eq $true) { return }
+        $_.BaseName
+    } | Where-Object { $_ } | Sort-Object
+}
+
+function Get-NestedValue {
+    <#
+    .SYNOPSIS
+      ドット区切りキーパス (例: 'installer.type') で hashtable / PSObject から値を取り出す。
+    #>
+    param($Object, [string]$KeyPath)
+    $current = $Object
+    foreach ($key in $KeyPath -split '\.') {
+        if ($null -eq $current) { return $null }
+        if ($current -is [hashtable]) {
+            if (-not $current.ContainsKey($key)) { return $null }
+            $current = $current[$key]
+        } else {
+            $prop = $current.PSObject.Properties[$key]
+            if (-not $prop) { return $null }
+            $current = $prop.Value
+        }
+    }
+    return $current
+}
+
 function Find-RegistryUninstallEntry {
     <#
     .SYNOPSIS

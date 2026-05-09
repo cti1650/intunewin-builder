@@ -31,27 +31,12 @@ if (-not (Get-Module -ListAvailable -Name powershell-yaml)) {
 }
 Import-Module powershell-yaml
 
+. "$PSScriptRoot/lib.ps1"
+
 $validInstallerTypes = @('msi', 'exe', 'msix', 'script')
 $validUninstallTypes = @('msi', 'exe', 'msix', 'script', 'registry_string')
 
-function Get-NestedValue {
-    param($Object, [string]$KeyPath)
-    $current = $Object
-    foreach ($key in $KeyPath -split '\.') {
-        if ($null -eq $current) { return $null }
-        if ($current -is [hashtable]) {
-            if (-not $current.ContainsKey($key)) { return $null }
-            $current = $current[$key]
-        } else {
-            $prop = $current.PSObject.Properties[$key]
-            if (-not $prop) { return $null }
-            $current = $prop.Value
-        }
-    }
-    return $current
-}
-
-$files = Get-ChildItem -Path $Path -Filter *.yml -File | Sort-Object Name
+$files = Get-AppFiles -AppsPath $Path
 if (-not $files) {
     Write-Host "No yml files found in $Path"
     exit 0

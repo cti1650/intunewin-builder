@@ -57,6 +57,120 @@ function Compare-Snapshots {
   }
 }
 
+function Format-ExitCodeStatus {
+    param([int]$ExitCode, [int[]]$SuccessCodes = @(0, 3010))
+    if ($SuccessCodes -contains $ExitCode) { return "Success ($ExitCode)" }
+    return "Failed ($ExitCode)"
+}
+
+function Stop-UninstallTargets {
+    param($AppDef)
+    if ($AppDef.uninstall.process_name) {
+        Write-Host "Stopping process: $($AppDef.uninstall.process_name)"
+        Stop-Process -Name $AppDef.uninstall.process_name -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 3
+    }
+    if ($AppDef.uninstall.service_name) {
+        Write-Host "Stopping service: $($AppDef.uninstall.service_name)"
+        Stop-Service -Name $AppDef.uninstall.service_name -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 3
+    }
+}
+
+function Invoke-MsiUninstall {
+    param($AppDef)
+    $match = Find-RegistryUninstallEntry -DisplayName $AppDef.detect.registry_display_name
+    if (-not ($match -and $match.PSChildName -match "^\{.*\}$")) {
+        return "Failed (No ProductCode)"
+    }
+    $uArgs = $AppDef.uninstall.args -replace "\{product_code\}", $match.PSChildName
+    $proc = Start-Process msiexec -ArgumentList $uArgs -PassThru -Wait
+    Write-Host "MSI uninstall exit code: $($proc.ExitCode)"
+    return Format-ExitCodeStatus $proc.ExitCode
+}
+
+function Invoke-RegistryStringUninstall {
+    param($AppDef)
+    $entry = Find-RegistryUninstallEntry -DisplayName $AppDef.detect.registry_display_name
+    if (-not $entry) {
+        Write-Warning "Registry entry not found for: $($AppDef.detect.registry_display_name)"
+        return "Failed (Registry entry not found)"
+    }
+    $uninstallCmd = if ($entry.QuietUninstallString) { $entry.QuietUninstallString } else { $entry.UninstallString }
+    Write-Host "Uninstall command: $uninstallCmd"
+    if ($uninstallCmd -match '^"([^"]+)"\s*(.*)$') {
+        $exe = $Matches[1]; $uArgs = $Matches[2].Trim()
+    } else {
+        $exe = $uninstallCmd; $uArgs = ""
+    }
+    $proc = if ($uArgs) {
+        Start-Process -FilePath $exe -ArgumentList $uArgs -PassThru -Wait
+    } else {
+        Start-Process -FilePath $exe -PassThru -Wait
+    }
+    Write-Host "Uninstall exit code: $($proc.ExitCode)"
+    return Format-ExitCodeStatus $proc.ExitCode
+}
+
+function Invoke-MsixUninstall {
+    param($AppDef)
+    $pkgName = $AppDef.uninstall.package_name
+    try {
+        Get-AppxPackage -AllUsers -Name "*$pkgName*" | Remove-AppxPackage -AllUsers -ErrorAction Stop
+        Write-Host "MSIX uninstall completed"
+        return "Success"
+    } catch {
+        Write-Warning "MSIX uninstall failed: $_"
+        return "Failed"
+    }
+}
+
+function Invoke-ExeUninstall {
+    param($AppDef)
+    $uninstallPath = $AppDef.uninstall.path
+    if (-not (Test-Path $uninstallPath)) {
+        Write-Warning "EXE uninstaller not found: $uninstallPath"
+        return "Failed (Uninstaller not found)"
+    }
+    Write-Host "Running EXE uninstaller: $uninstallPath $($AppDef.uninstall.args)"
+    $process = Start-Process -FilePath $uninstallPath -ArgumentList $AppDef.uninstall.args -PassThru -Wait
+    if ($process.ExitCode -eq 0) {
+        Write-Host "EXE uninstall completed (exit code: 0)"
+        return "Success"
+    }
+    Write-Warning "EXE uninstall failed (exit code: $($process.ExitCode))"
+    return "Failed ($($process.ExitCode))"
+}
+
+function Invoke-ScriptUninstall {
+    param($AppDef, [string]$App, [bool]$IsCustomScript)
+
+    if ($IsCustomScript) {
+        $uninstallScriptName = $AppDef.uninstall.script
+        if (-not $uninstallScriptName) {
+            Write-Warning "custom_script app has no uninstall.script defined; skipping"
+            return "Skipped (no script)"
+        }
+        $uninstallScriptPath = "scripts/apps/$App/$uninstallScriptName"
+        if (-not (Test-Path $uninstallScriptPath)) {
+            Write-Warning "Custom uninstall script not found: $uninstallScriptPath"
+            return "Failed (script not found)"
+        }
+        Write-Host "Running custom uninstall script: $uninstallScriptPath"
+        & powershell.exe -ExecutionPolicy Bypass -File $uninstallScriptPath
+        if ($LASTEXITCODE -eq 0) { return "Success" }
+        return "Failed ($LASTEXITCODE)"
+    }
+
+    $registryName = $AppDef.uninstall.registry_name
+    if (-not $registryName) { $registryName = $AppDef.detect.registry_display_name }
+    Write-Host "Uninstalling via generic-install.ps1..."
+    Write-Host "  RegistryName: $registryName"
+    & scripts/generic-install.ps1 -Uninstall -RegistryName $registryName
+    if ($LASTEXITCODE -eq 0) { return "Success" }
+    return "Failed ($LASTEXITCODE)"
+}
+
 function Get-BinaryArchitecture {
     param($Path)
     if (-not (Test-Path $Path)) { return "NotFound" }
@@ -373,128 +487,17 @@ try {
     # ==========
     if ($appDef.uninstall) {
         Write-Host "Uninstalling..."
-        $unType = $appDef.uninstall.type
+        Stop-UninstallTargets -AppDef $appDef
 
-        # Stop processes/services before uninstalling (if specified)
-        if ($appDef.uninstall.process_name) {
-            Write-Host "Stopping process: $($appDef.uninstall.process_name)"
-            Stop-Process -Name $appDef.uninstall.process_name -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 3
-        }
-        if ($appDef.uninstall.service_name) {
-            Write-Host "Stopping service: $($appDef.uninstall.service_name)"
-            Stop-Service -Name $appDef.uninstall.service_name -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 3
+        $summary.UninstallStatus = switch ($appDef.uninstall.type) {
+            'script'          { Invoke-ScriptUninstall          -AppDef $appDef -App $App -IsCustomScript $isCustomScript }
+            'msi'             { Invoke-MsiUninstall             -AppDef $appDef }
+            'registry_string' { Invoke-RegistryStringUninstall  -AppDef $appDef }
+            'msix'            { Invoke-MsixUninstall            -AppDef $appDef }
+            'exe'             { Invoke-ExeUninstall             -AppDef $appDef }
+            default           { "Skipped (unknown type: $($appDef.uninstall.type))" }
         }
 
-        if ($unType -eq "script") {
-            if ($isCustomScript) {
-                # Custom uninstall script
-                $uninstallScriptName = $appDef.uninstall.script
-                if (-not $uninstallScriptName) {
-                    Write-Warning "custom_script app has no uninstall.script defined; skipping"
-                    $summary.UninstallStatus = "Skipped (no script)"
-                } else {
-                    $uninstallScriptPath = "scripts/apps/$App/$uninstallScriptName"
-                    if (-not (Test-Path $uninstallScriptPath)) {
-                        $summary.UninstallStatus = "Failed (script not found)"
-                        Write-Warning "Custom uninstall script not found: $uninstallScriptPath"
-                    } else {
-                        Write-Host "Running custom uninstall script: $uninstallScriptPath"
-                        & powershell.exe -ExecutionPolicy Bypass -File $uninstallScriptPath
-                        if ($LASTEXITCODE -eq 0) {
-                            $summary.UninstallStatus = "Success"
-                        } else {
-                            $summary.UninstallStatus = "Failed ($LASTEXITCODE)"
-                        }
-                    }
-                }
-            } else {
-                # Script-based uninstall (generic-install.ps1)
-                $registryName = $appDef.uninstall.registry_name
-                if (-not $registryName) { $registryName = $appDef.detect.registry_display_name }
-                Write-Host "Uninstalling via generic-install.ps1..."
-                Write-Host "  RegistryName: $registryName"
-                & scripts/generic-install.ps1 -Uninstall -RegistryName $registryName
-                if ($LASTEXITCODE -eq 0) {
-                    $summary.UninstallStatus = "Success"
-                } else {
-                    $summary.UninstallStatus = "Failed ($LASTEXITCODE)"
-                }
-            }
-        } elseif ($unType -eq "msi") {
-            $searchName = $appDef.detect.registry_display_name
-            $match = Find-RegistryUninstallEntry -DisplayName $searchName
-            if ($match -and $match.PSChildName -match "^\{.*\}$") {
-                $pCode = $match.PSChildName
-                $uArgs = $appDef.uninstall.args -replace "\{product_code\}", $pCode
-                $proc = Start-Process msiexec -ArgumentList $uArgs -PassThru -Wait
-                $exitCode = $proc.ExitCode
-                Write-Host "MSI uninstall exit code: $exitCode"
-                if ($exitCode -eq 0 -or $exitCode -eq 3010) {
-                    $summary.UninstallStatus = "Success ($exitCode)"
-                } else {
-                    $summary.UninstallStatus = "Failed ($exitCode)"
-                }
-            } else { $summary.UninstallStatus = "Failed (No ProductCode)" }
-        } elseif ($unType -eq "registry_string") {
-            # Use UninstallString / QuietUninstallString from registry
-            $searchName = $appDef.detect.registry_display_name
-            $entry = Find-RegistryUninstallEntry -DisplayName $searchName
-            if ($entry) {
-                $uninstallCmd = if ($entry.QuietUninstallString) { $entry.QuietUninstallString } else { $entry.UninstallString }
-                Write-Host "Uninstall command: $uninstallCmd"
-                if ($uninstallCmd -match '^"([^"]+)"\s*(.*)$') {
-                    $exe = $Matches[1]; $uArgs = $Matches[2].Trim()
-                } else {
-                    $exe = $uninstallCmd; $uArgs = ""
-                }
-                $proc = if ($uArgs) {
-                    Start-Process -FilePath $exe -ArgumentList $uArgs -PassThru -Wait
-                } else {
-                    Start-Process -FilePath $exe -PassThru -Wait
-                }
-                $exitCode = $proc.ExitCode
-                Write-Host "Uninstall exit code: $exitCode"
-                if ($exitCode -eq 0 -or $exitCode -eq 3010) {
-                    $summary.UninstallStatus = "Success ($exitCode)"
-                } else {
-                    $summary.UninstallStatus = "Failed ($exitCode)"
-                }
-            } else {
-                $summary.UninstallStatus = "Failed (Registry entry not found)"
-                Write-Warning "Registry entry not found for: $searchName"
-            }
-        } elseif ($unType -eq "msix") {
-            $pkgName = $appDef.uninstall.package_name
-            try {
-                Get-AppxPackage -AllUsers -Name "*$pkgName*" | Remove-AppxPackage -AllUsers -ErrorAction Stop
-                $summary.UninstallStatus = "Success"
-                Write-Host "MSIX uninstall completed"
-            } catch {
-                $summary.UninstallStatus = "Failed"
-                Write-Warning "MSIX uninstall failed: $_"
-            }
-        } elseif ($unType -eq "exe") {
-            $uninstallPath = $appDef.uninstall.path
-            $uninstallArgs = $appDef.uninstall.args
-
-            if (Test-Path $uninstallPath) {
-                Write-Host "Running EXE uninstaller: $uninstallPath $uninstallArgs"
-                $process = Start-Process -FilePath $uninstallPath -ArgumentList $uninstallArgs -PassThru -Wait
-                if ($process.ExitCode -eq 0) {
-                    $summary.UninstallStatus = "Success"
-                    Write-Host "EXE uninstall completed (exit code: 0)"
-                } else {
-                    $summary.UninstallStatus = "Failed ($($process.ExitCode))"
-                    Write-Warning "EXE uninstall failed (exit code: $($process.ExitCode))"
-                }
-            } else {
-                $summary.UninstallStatus = "Failed (Uninstaller not found)"
-                Write-Warning "EXE uninstaller not found: $uninstallPath"
-            }
-        }
-        
         Start-Sleep -Seconds 5
         
         # Verify Cleanup
