@@ -28,10 +28,18 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$targets = @()
 if ($Files.Count -gt 0) {
-    $targets = $Files | Where-Object { Test-Path $_ } | ForEach-Object { Get-Item $_ }
+    # ファイル個別指定 (pre-commit hook 用途) と同時にディレクトリを渡された
+    # ケースでも落ちないようハイブリッドに扱う
+    foreach ($f in $Files) {
+        if (Test-Path -Path $f -PathType Leaf) {
+            $targets += Get-Item -Path $f
+        } elseif (Test-Path -Path $f -PathType Container) {
+            $targets += Get-ChildItem -Path $f -Filter *.ps1 -Recurse -File
+        }
+    }
 } else {
-    $targets = @()
     foreach ($p in $Path) {
         if (Test-Path $p) {
             $targets += Get-ChildItem -Path $p -Filter *.ps1 -Recurse -File
