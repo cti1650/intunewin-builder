@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Stage された *.ps1 を構文チェックする pre-commit hook。
+# pwsh 未インストール時は警告のみで通す (CI 側で最終ガード)。
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.ps1$' || true)
+
+if [ -z "$STAGED" ]; then
+    exit 0
+fi
+
+if ! command -v pwsh >/dev/null 2>&1; then
+    echo "pre-commit: pwsh が見つからないため PowerShell 構文チェックをスキップ" >&2
+    echo "pre-commit: 導入推奨 -> brew install --cask powershell (macOS)" >&2
+    exit 0
+fi
+
+echo "pre-commit: PowerShell 構文チェック中..."
+# shellcheck disable=SC2086
+pwsh -NoProfile -File "$REPO_ROOT/scripts/check-syntax.ps1" -Files $STAGED
