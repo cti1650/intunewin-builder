@@ -35,6 +35,7 @@ GitHub Actions 上で Windows アプリのインストーラを取得し、Micro
 |---|---|
 | `installer.type` | `msi`, `exe`, `msix`, `script` |
 | `uninstall.type` | `msi`, `exe`, `msix`, `script`, `registry_string` |
+| `intune.install_behavior` | `system`, `user` (必須。Intune の "Install behavior" 設定と同義) |
 
 加えて:
 
@@ -42,6 +43,7 @@ GitHub Actions 上で Windows アプリのインストーラを取得し、Micro
 - `custom_script: true` でない場合は `download.url` 必須
 - `script_based: true` でない場合は `download.file` 必須
 - `detect` ブロックは必須
+- `detect.file` / `uninstall.path` には `%LocalAppData%` 等の環境変数を埋め込める (verify-installer は `Expand-EnvPath` で実パスへ展開する)。`install_behavior: user` のアプリは原則 `%LocalAppData%` プレースホルダ表記を使う
 
 ## 命名規則
 

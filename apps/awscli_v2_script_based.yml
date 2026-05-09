@@ -17,3 +17,6 @@ detect:
 uninstall:
   type: script
   registry_name: "AWS Command Line Interface v2"
+
+intune:
+  install_behavior: system

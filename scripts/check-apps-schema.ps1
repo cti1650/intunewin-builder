@@ -35,6 +35,7 @@ Import-Module powershell-yaml
 
 $validInstallerTypes = @('msi', 'exe', 'msix', 'script')
 $validUninstallTypes = @('msi', 'exe', 'msix', 'script', 'registry_string')
+$validInstallBehaviors = @('system', 'user')
 
 $files = Get-AppFiles -AppsPath $Path
 if (-not $files) {
@@ -79,6 +80,14 @@ foreach ($file in $files) {
     # detect
     if (-not (Get-NestedValue $def 'detect')) {
         $errors += "missing 'detect' block"
+    }
+
+    # intune.install_behavior (Intune の Install behavior と同名・同義: system / user)
+    $installBehavior = Get-NestedValue $def 'intune.install_behavior'
+    if (-not $installBehavior) {
+        $errors += "missing 'intune.install_behavior'"
+    } elseif ($installBehavior -notin $validInstallBehaviors) {
+        $errors += "invalid intune.install_behavior '$installBehavior' (must be: $($validInstallBehaviors -join ', '))"
     }
 
     # download.url / download.file (custom_script でなければ必須)

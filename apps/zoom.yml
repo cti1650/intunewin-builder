@@ -21,6 +21,7 @@ uninstall:
 # Intune Win32アプリ設定値（参照用）
 # ==========
 intune:
+  install_behavior: system
   install_command: "msiexec /i ZoomInstallerFull.msi /qn /norestart ZoomAutoUpdate=true"
   # ProductCodeはMSIのプロパティまたは検証時のレジストリから確認
   uninstall_command: 'msiexec /x "{ProductCode}" /qn'

@@ -153,6 +153,7 @@ installer_name: $setup
 file_version: $version
 sha256: $($hash.Hash)
 downloaded_at_utc: $downloadUtc
+install_behavior: $($appDef.intune.install_behavior)
 "@ | Out-File "output/metadata.txt" -Encoding utf8
 
 Write-Host "Build completed successfully"

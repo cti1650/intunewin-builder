@@ -66,6 +66,9 @@ if ($isCustomScript) {
 # ==========
 # Generate metadata file for reference
 # ==========
+$installBehavior = $appDef.intune.install_behavior
+$installBehaviorLabel = if ($installBehavior -eq 'user') { 'User' } else { 'System' }
+
 if ($isCustomScript) {
     $installCmd = "powershell.exe -ExecutionPolicy Bypass -File $mainScriptName"
     $uninstallCmd = if ($appDef.uninstall.script) {
@@ -77,6 +80,7 @@ if ($isCustomScript) {
 
 App: $($appDef.name)
 Mode: custom_script
+Install Behavior: $installBehaviorLabel
 
 # Intune Install Command:
 $installCmd
@@ -96,6 +100,7 @@ App: $($appDef.name)
 Download URL: $($appDef.download.url)
 Install Args: $($appDef.installer.install_args)
 Registry Name: $($appDef.detect.registry_display_name)
+Install Behavior: $installBehaviorLabel
 
 # Intune Install Command:
 powershell.exe -ExecutionPolicy Bypass -File generic-install.ps1 -Url "$($appDef.download.url)" -Args "$($appDef.installer.install_args)"
@@ -150,6 +155,7 @@ type: script_based (custom_script)
 install_script: $mainScriptName
 uninstall_script: $($appDef.uninstall.script)
 detect_file: $($appDef.detect.file)
+install_behavior: $installBehavior
 built_at_utc: $((Get-Date).ToUniversalTime().ToString("o"))
 "@ | Out-File "output/metadata.txt" -Encoding utf8
 } else {
@@ -159,6 +165,7 @@ type: script_based
 download_url: $($appDef.download.url)
 install_args: $($appDef.installer.install_args)
 registry_name: $($appDef.detect.registry_display_name)
+install_behavior: $installBehavior
 built_at_utc: $((Get-Date).ToUniversalTime().ToString("o"))
 "@ | Out-File "output/metadata.txt" -Encoding utf8
 }
@@ -166,6 +173,9 @@ built_at_utc: $((Get-Date).ToUniversalTime().ToString("o"))
 Write-Host "Build completed successfully"
 Write-Host ""
 Write-Host "=== Intune Configuration ===" -ForegroundColor Cyan
+Write-Host "Install Behavior:"
+Write-Host "  $installBehaviorLabel"
+Write-Host ""
 if ($isCustomScript) {
     Write-Host "Install Command:"
     Write-Host "  powershell.exe -ExecutionPolicy Bypass -File $mainScriptName"

@@ -69,6 +69,9 @@ uninstall:
 # Intune Win32アプリ設定値（参照用）
 # ==========
 intune:
+  # Intune の "Install behavior" 設定値: system (per-machine) / user (per-user)
+  # MSI per-machine インストーラは原則 system。NSIS per-user 系 (例: ovice) は user
+  install_behavior: system
   install_command: "msiexec /i <file> /qn /norestart"
   uninstall_command: 'msiexec /x "{ProductCode}" /qn'
   detection:
@@ -98,7 +101,12 @@ detect:
 uninstall:
   type: script
   registry_name: "<DisplayName>"
+
+intune:
+  install_behavior: system
 ```
+
+`intune.install_behavior` は必須フィールドで `system` または `user` のみ受け付ける ([scripts/check-apps-schema.ps1](../../scripts/check-apps-schema.ps1) で機械検証)。ユーザーコンテキストインストーラ (NSIS の per-user / Squirrel 等) のみ `user` を選び、検出パスは `%LocalAppData%` プレースホルダで書く ([apps/ovice.yml](../../apps/ovice.yml) 参照)。
 
 EXE / MSIX / 特殊ケースの引数は [references/installer-engines.md](references/installer-engines.md) を参照。
 
