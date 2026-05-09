@@ -10,6 +10,8 @@ installer:
 
 detect:
   file: "C:\\Program Files\\Amazon\\AWSCLIV2\\aws.exe"
+  # aws.exe は PE FileVersion を持たないため、verify-installer はレジストリ DisplayVersion を参照する
+  version: "2.0"
   registry_display_name: "AWS Command Line Interface v2"
 
 uninstall:

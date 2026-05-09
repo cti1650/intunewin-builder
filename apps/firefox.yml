@@ -10,19 +10,22 @@ installer:
 
 detect:
   file: "C:\\Program Files\\Mozilla Firefox\\firefox.exe"
+  version: "150.0"
   registry_display_name: "Mozilla Firefox"
 
 uninstall:
-  type: msi
-  args: "/x {product_code} /qn"
+  # Firefox MSI は Uninstall レジストリキー名が GUID ではなく "Mozilla Firefox" 文字列のため
+  # ProductCode ベース (uninstall.type: msi) では検出できない。
+  # 代わりに registry_string で QuietUninstallString (helper.exe /S /MaintenanceService=false) を実行する。
+  type: registry_string
 
 # ==========
 # Intune Win32アプリ設定値（参照用）
 # ==========
 intune:
   install_command: "msiexec /i Firefox-Setup-x64.msi /qn /norestart"
-  # ProductCodeはMSIのプロパティまたは検証時のレジストリから確認
-  uninstall_command: 'msiexec /x "{ProductCode}" /qn'
+  # registry HKLM\...\Uninstall\Mozilla Firefox の QuietUninstallString を直接利用する形を推奨
+  uninstall_command: '"%ProgramFiles%\Mozilla Firefox\uninstall\helper.exe" /S /MaintenanceService=false'
   detection:
     type: file
     path: "C:\\Program Files\\Mozilla Firefox"

@@ -12,8 +12,12 @@ if (-not (Test-Path $ShortcutDir)) {
 }
 
 try {
+    # WScript.Shell の Save() は en-US Windows などシステムロケールに含まれない
+    # 文字を含むパスでは安定しない (例: ja の "ポータルサイト.lnk")。
+    # 一旦 ASCII パスに保存してから NTFS の Move-Item で本来のパスへ移す。
+    $TempShortcut = Join-Path $env:TEMP "_companyportal_shortcut.lnk"
     $WshShell = New-Object -ComObject WScript.Shell
-    $Shortcut = $WshShell.CreateShortcut($ShortcutPath)
+    $Shortcut = $WshShell.CreateShortcut($TempShortcut)
 
     # Public Desktop に置く UWP ショートカットは TargetPath = shell:AppsFolder\... を
     # 直接指定するとクリックしても起動しない (システムコンテキストでの解決が機能しないため)。
@@ -49,7 +53,9 @@ try {
 
     $Shortcut.Save()
 
-    if (-not (Test-Path $ShortcutPath)) {
+    Move-Item -LiteralPath $TempShortcut -Destination $ShortcutPath -Force
+
+    if (-not (Test-Path -LiteralPath $ShortcutPath)) {
         throw "Shortcut not found at expected path: $ShortcutPath"
     }
     Write-Output "Shortcut created successfully."

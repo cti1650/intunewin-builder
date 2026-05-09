@@ -11,6 +11,7 @@ installer:
 
 detect:
   file: "C:\\Program Files\\Mozilla Firefox\\firefox.exe"
+  version: "150.0"
   registry_display_name: "Mozilla Firefox"
 
 uninstall:
