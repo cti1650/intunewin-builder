@@ -9,22 +9,25 @@ installer:
   install_args: "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
 
 detect:
-  file: "C:\\Program Files (x86)\\Gyazo Teams\\GyazoTeams.exe"
-  # Inno Setup 5.6.0 unicode "Gyazo Teams 5.9.0.0" (innoextract -i で確認)
-  version: "5.9.0.0"
+  # Gyazo Teams は Inno Setup PrivilegesRequired=lowest の per-user installer。
+  # %LocalAppData%\Programs\Gyazo Teams\ 配下に展開され、verify-installer の
+  # Expand-EnvPath で実パスに解決される。registry DisplayVersion は "5.9"
+  # (4-part でない) なので detect.version も同形式で揃える。
+  file: "%LocalAppData%\\Programs\\Gyazo Teams\\GyazoTeams.exe"
+  version: "5.9"
   registry_display_name: "Gyazo Teams"
 
 uninstall:
   type: exe
-  path: "C:\\Program Files (x86)\\Gyazo Teams\\unins000.exe"
+  path: "%LocalAppData%\\Programs\\Gyazo Teams\\unins000.exe"
   args: "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
 
 # Intune Win32 App 登録時の参照値 (verify-installer / build スクリプトの動作には不要)
 intune:
-  install_behavior: system
+  install_behavior: user
   install_command: "GyazoTeams-5.9.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
-  uninstall_command: "\"C:\\Program Files (x86)\\Gyazo Teams\\unins000.exe\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
+  uninstall_command: "\"%LocalAppData%\\Programs\\Gyazo Teams\\unins000.exe\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
   detection:
     type: file
-    path: "C:\\Program Files (x86)\\Gyazo Teams"
+    path: "%LocalAppData%\\Programs\\Gyazo Teams"
     file: "GyazoTeams.exe"
