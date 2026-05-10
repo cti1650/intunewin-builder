@@ -108,7 +108,7 @@ intune:
 
 `intune.install_behavior` は必須フィールドで `system` または `user` のみ受け付ける ([scripts/check-apps-schema.ps1](../../scripts/check-apps-schema.ps1) で機械検証)。ユーザーコンテキストインストーラ (NSIS の per-user / Squirrel 等) のみ `user` を選び、検出パスは `%LocalAppData%` プレースホルダで書く ([apps/ovice.yml](../../apps/ovice.yml) 参照)。
 
-EXE / MSIX / 特殊ケースの引数は [references/installer-engines.md](references/installer-engines.md) を参照。
+EXE / MSIX / 特殊ケースの引数は [references/installer-engines.md](references/installer-engines.md) を参照。`detect.version` の値選びは特に注意 (consumer stable と Enterprise MSI が乖離するケースあり) — 同 references 内「`detect.version` の値選びの注意」を必読。
 
 ### 4. build-and-verify.yml の choice options を更新
 

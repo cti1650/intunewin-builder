@@ -73,15 +73,16 @@ DetectionStatus: Failed
 
 | サブ症状 | 原因 |
 |---|---|
-| `detect.file` が見つからない | パスが Program Files vs Program Files (x86) で誤り |
+| `detect.file` が見つからない | パスが Program Files vs Program Files (x86) で誤り、または `install_behavior: user` のアプリで `%LocalAppData%` プレースホルダ未指定 |
 | `registry_display_name` が見つからない | DisplayName のベース名指定が違う、または EXE インストーラなのに MSI 検出経路を期待 |
-| 検出条件は通るが Version check で落ちる | `detect.version` が実バージョンより新しい (or 配布元の latest が更新された) |
+| 検出条件は通るが Version check で落ちる | `detect.version` の pin が**実機 install 結果より高い** (consumer release notes をそのまま信じて pin した、または配布元の latest が前バージョンに後退した) |
 
 **対処**:
 
 1. ログの「インストール後スナップショット」差分から実際にインストールされたパスを確認
 2. `detect.file` と `detect.registry_display_name` を実値に揃える
 3. バージョンを固定したくないなら `detect.version` を空 or 削除
+4. **VersionCheck Failed の場合は verify サマリの `InstalledVersion` が正解値**。yml の `detect.version` をその値に合わせる。consumer release notes / blog 記事の版数は **信用しない** — Chrome 等は consumer stable と Enterprise MSI で別系統で 1〜2 マイナー遅延する
 
 ### Uninstall 失敗
 
