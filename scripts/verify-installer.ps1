@@ -441,6 +441,14 @@ try {
             Write-Warning "File detection: Failed (not found: $detectFile)"
             $detectionResults["File"] = $false
             $summary.VersionCheck = "Skipped (File not found)"
+            # 診断: registry の InstallLocation を表示し、yml の detect.file 修正先を分かりやすくする
+            if ($appDef.detect.registry_display_name) {
+                $entry = Find-RegistryUninstallEntry -DisplayName $appDef.detect.registry_display_name
+                if ($entry -and $entry.InstallLocation) {
+                    Write-Host "Hint: registry InstallLocation = $($entry.InstallLocation)"
+                    Write-Host "      (yml の detect.file が実際の install 先と乖離している可能性)"
+                }
+            }
         }
 
         # インストール場所チェック（x64/x86両方を確認）
