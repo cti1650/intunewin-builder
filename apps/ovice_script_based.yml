@@ -13,11 +13,33 @@ installer:
   install_args: "/S"
 
 detect:
+  file: "%LocalAppData%\\Programs\\ovice\\ovice.exe"
+  # registry DisplayVersion 実値 (CI verify-installer ログで確認した値)
+  version: "1.22.8"
   registry_display_name: "ovice"
 
 uninstall:
   type: script
   registry_name: "ovice"
 
+# ==========
+# Intune Win32アプリ設定値（参照用）
+# ==========
 intune:
   install_behavior: user
+
+  # script_based 版は generic-install.ps1 経由で URL から DL → /S で起動。
+  # Intune UI に貼る Install/Uninstall command。
+  install_command: 'powershell.exe -ExecutionPolicy Bypass -File generic-install.ps1 -Url "https://assets.ovice.io/desktop-apps/bin/ovice-x64-latest-Setup.exe" -Args "/S"'
+  uninstall_command: 'powershell.exe -ExecutionPolicy Bypass -File generic-install.ps1 -Uninstall -RegistryName "ovice"'
+
+  detection:
+    # Intune の File-based detection rule は %LocalAppData% を解釈しないため、
+    # ユーザーコンテキスト app は Custom Detection Script を使うのが確実。
+    type: custom_script
+    script: |
+      if (Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\ovice\ovice.exe')) {
+          Write-Output 'Detected'
+          exit 0
+      }
+      exit 1

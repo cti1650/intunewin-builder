@@ -13,6 +13,8 @@ installer:
 
 detect:
   file: "%LocalAppData%\\Programs\\ovice\\ovice.exe"
+  # registry DisplayVersion 実値 (CI verify-installer ログで確認した値)
+  version: "1.22.8"
   registry_display_name: "ovice"
 
 uninstall:
@@ -20,5 +22,26 @@ uninstall:
   path: "%LocalAppData%\\Programs\\ovice\\Uninstall ovice.exe"
   args: "/S"
 
+# ==========
+# Intune Win32アプリ設定値（参照用）
+# ==========
 intune:
+  # ユーザーコンテキストインストール (per-user)。Intune の Win32 App > Install behavior に "User" を設定。
   install_behavior: user
+
+  # Install / Uninstall command (Intune は user-context の command で %LocalAppData% を展開する)
+  install_command: "ovice-x64-latest-Setup.exe /S"
+  uninstall_command: "\"%LocalAppData%\\Programs\\ovice\\Uninstall ovice.exe\" /S"
+
+  detection:
+    # Intune の File-based detection rule は %LocalAppData% を解釈しないため、
+    # ユーザーコンテキスト app は Custom Detection Script を使うのが確実。
+    # 以下の script を Intune UI の "Detection rules > Use a custom detection script"
+    # にそのまま貼り付ける想定。
+    type: custom_script
+    script: |
+      if (Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\ovice\ovice.exe')) {
+          Write-Output 'Detected'
+          exit 0
+      }
+      exit 1
