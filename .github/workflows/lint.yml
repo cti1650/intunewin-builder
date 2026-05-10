@@ -66,15 +66,19 @@ jobs:
         run: ${{ steps.actionlint.outputs.executable }} -color
 
   # ==========================================================================
-  # 以下、master push 時のみ走る後段ジョブ。
-  # 直前 commit の差分から「触られた app」だけを matrix に絞って verify する。
+  # 以下、master push と PR push の両方で走る後段ジョブ。
+  # 「触られた app」だけを matrix に絞って verify する (差分基準):
+  #   - master push: 直前 commit (HEAD~1) との diff
+  #   - pull_request: PR base 分岐との diff (origin/<base>...HEAD)
   # apps/<x>.yml or scripts/apps/<x>/** が変更されていなければ何も走らない。
   # ==========================================================================
 
   detect-affected-apps:
     name: detect affected apps from diff
     needs: [ps-syntax, apps-schema, choice-list, actionlint]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
     timeout-minutes: 3
     outputs:
@@ -83,7 +87,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          fetch-depth: 2  # 直前 commit との diff を取るため
+          # PR では base ref と head ref の両方を持っておく必要があるため全 history。
+          # master push は HEAD~1 が読めれば十分だが diff の式を共通化するため 0 にする。
+          fetch-depth: 0
 
       - name: Install powershell-yaml
         shell: pwsh
@@ -94,8 +100,20 @@ jobs:
       - name: Detect affected apps
         id: detect
         shell: pwsh
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          $changed = git diff --name-only HEAD~1 HEAD
+          if ($env:EVENT_NAME -eq 'pull_request') {
+            # PR は base 分岐との 3 点 diff (origin/<base>...HEAD)
+            $diffSpec = "origin/$env:BASE_REF...HEAD"
+            Write-Host "Diff spec: $diffSpec (pull_request from origin/$env:BASE_REF)"
+          } else {
+            # master push: 直前 commit との diff
+            $diffSpec = "HEAD~1...HEAD"
+            Write-Host "Diff spec: $diffSpec (push to master)"
+          }
+          $changed = git diff --name-only $diffSpec
           Write-Host "Changed files:"
           $changed | ForEach-Object { Write-Host "  $_" }
 
