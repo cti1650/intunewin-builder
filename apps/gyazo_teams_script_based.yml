@@ -10,9 +10,9 @@ installer:
   install_args: "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
 
 detect:
-  # Gyazo Teams は per-user installer (Inno Setup PrivilegesRequired=lowest)。
-  # registry DisplayVersion は "5.9" (4-part でない)。
-  file: "%LocalAppData%\\Programs\\Gyazo Teams\\GyazoTeams.exe"
+  # Gyazo Teams は per-machine installer で C:\Program Files (x86)\Gyazo\ 配下に
+  # 展開される (regular Gyazo と install dir を共有、binary 名だけ違う設計)。
+  file: "C:\\Program Files (x86)\\Gyazo\\GyazoTeams.exe"
   version: "5.9"
   registry_display_name: "Gyazo Teams"
 
@@ -21,4 +21,4 @@ uninstall:
   registry_name: "Gyazo Teams"
 
 intune:
-  install_behavior: user
+  install_behavior: system
