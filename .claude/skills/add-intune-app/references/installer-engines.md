@@ -140,6 +140,30 @@ detect:
 - `registry_display_name` は `-like "*<name>*"` で部分一致するため、「Mozilla Firefox」等のベース名で OK (バージョン込みの DisplayName を書かない)
 - MSIX は `appx_name` (パッケージ名) を使う
 
+### `detect.version` の値選びの注意
+
+VersionCheck は `[version]'<installed>' -ge [version]'<pinned>'` で評価される。pin が **実機 install 結果より高い**と Failed になる。
+
+**信頼できる情報源 (優先順)**:
+
+1. **CI で `build-and-verify-intunewin -App <name>` を実走した結果の `InstalledVersion`** — これが正解。yml に書いてある download URL から落ちる実バイナリの版数なので、必ずパスする
+2. **MSI の `ProductVersion`** (`scripts/build-intunewin.ps1` が `Get-InstallerVersion` で読み出す値) — レジストリ DisplayVersion と一致するのが普通
+3. ベンダーの release notes / changelog — 参考程度
+
+**信頼してはいけない情報源**:
+
+- マーケティング / consumer / blog / release feed の版数。Enterprise / per-machine 配布版は別チャネルで遅延するケースがある
+- 例: **Chrome は consumer stable channel と Enterprise MSI で別系統**。`versionhistory.googleapis.com` (consumer) は 148.0.7778.97 を返したが、`dl.google.com/chrome/install/googlechromestandaloneenterprise64.msi` は 147.0.7727.138 を配布していた (1〜2 マイナー遅延)
+- 実バイナリを落として `Get-InstallerVersion` で確認するか、CI の verify サマリで `InstalledVersion` を見る方が安全
+
+**運用フロー**:
+
+新規アプリで version pin を決めるとき、または既存 yml の version を更新するときは:
+
+1. `version` を空にした状態で PR を出して CI を回す
+2. verify サマリの `InstalledVersion` 行を見る (例: `InstalledVersion: 147.0.7727.138`)
+3. その値をそのまま `detect.version` に書き、別 commit で push して PR 更新
+
 ## 引数組み立てチェックリスト
 
 PR を出す前に以下を全部確認:
