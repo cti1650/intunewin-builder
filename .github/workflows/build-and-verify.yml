@@ -12,6 +12,7 @@ on:
           - chrome
           - firefox
           - gyazo
+          - gyazo_teams
           - okta_verify
           - ovice
           - warp
