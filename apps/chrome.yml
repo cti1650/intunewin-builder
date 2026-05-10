@@ -19,13 +19,10 @@ uninstall:
   type: msi
   args: "/x {product_code} /qn"
 
-# ==========
-# Intune Win32アプリ設定値（参照用）
-# ==========
+# Intune Win32 App 登録時の参照値 (verify-installer / build スクリプトの動作には不要)
 intune:
   install_behavior: system
   install_command: "msiexec /i googlechromestandaloneenterprise64.msi /qn /norestart"
-  # ProductCodeはMSIのプロパティまたは検証時のレジストリから確認
   uninstall_command: 'msiexec /x "{ProductCode}" /qn'
   detection:
     type: file
