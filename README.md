@@ -174,6 +174,28 @@ pwsh -File scripts/check-apps-schema.ps1
 pwsh -File scripts/check-choice-list.ps1
 ```
 
+### 自動 build-verify chain (master push / PR push 共通)
+
+lint 完走後、`detect-affected-apps` ジョブが直前 commit / PR base との `git diff` から「変更された app」だけを matrix に絞って `build-and-verify-apps` / `script-based-verify-apps` を chain 実行する:
+
+| イベント | diff の基準 |
+|---|---|
+| master push | `HEAD~1...HEAD` |
+| pull_request | `origin/<base>...HEAD` (PR 全体の差分) |
+
+トリガー対象になる変更:
+
+- `apps/<name>.yml` → `<name>` のみ matrix
+- `apps/<name>_script_based.yml` / `_shortcut.yml` → 同上 (script_based 側 matrix)
+- `scripts/apps/<name>/**` → 対応 yml に応じて振り分け
+- それ以外 (`scripts/*.ps1` / `.github/**` 等) → matrix は空、chain は skip
+
+連続 push は `cancel-in-progress: true` で古い run を cancel し最新 commit だけ最後まで走る (あと優先)。
+
+### CI 限定 Defender 例外
+
+`scripts/generic-install.ps1` と `scripts/verify-installer.ps1` の EXE インストーラ起動箇所には、`$env:GITHUB_ACTIONS -eq 'true'` 限定で `Add-MpPreference -ExclusionPath` を仕込んである。Azure 特定 region (northcentralus 等) で NSIS 系 Setup.exe の子プロセス起動が Windows Defender real-time scanning と衝突して `0xC0000005` (`-1073741819`) で死ぬ flaky を回避するため。エンドユーザー端末 (Intune 配信先) では発火しない。
+
 ## 補足
 
 このリポジトリは

@@ -87,6 +87,18 @@ URL HEAD で 200 が返るかは PR 前に手元で `curl -sIL <url>` で必ず�
 
 `apps/`、`scripts/`、`.github/`、`.githooks/` 配下の変更でトリガーされる。**lint を通せない PR はマージしない**。
 
+lint 完走後、`detect-affected-apps` ジョブが diff から「変更された app」だけを matrix に絞って `build-and-verify-apps` / `script-based-verify-apps` を chain 実行する。**master push と PR push の両方で発火**し、関係ない変更 (例: README のみ) では何も走らない。連続 push は cancel-in-progress であと優先。
+
+## CI 限定の Defender 例外ルール
+
+`scripts/generic-install.ps1` と `scripts/verify-installer.ps1` の **EXE インストーラ起動箇所**には、`$env:GITHUB_ACTIONS -eq 'true'` ガード付きで `Add-MpPreference -ExclusionPath` を仕込んである。Azure 特定 region (northcentralus 等) で NSIS 系 Setup.exe の子プロセス起動が Defender real-time scanning と衝突して `0xC0000005` (`-1073741819` ACCESS_VIOLATION) で死ぬ flaky を回避する目的。
+
+新規アプリで EXE 系 Setup を扱う scripts を追加するとき:
+
+- `$env:GITHUB_ACTIONS` で必ずガードする (エンドユーザー端末では発火させない)
+- `try/catch` + `-ErrorAction SilentlyContinue` で Defender 不在環境でも黙ってスキップ
+- 例外パスは installer ファイルが置かれているディレクトリ単位 (`Split-Path -Parent`)
+
 ## ローカルでの確認コマンド
 
 PowerShell Core (`pwsh`) が必要。macOS は `brew install --cask powershell`。
