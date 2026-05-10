@@ -134,13 +134,15 @@ function Invoke-MsixUninstall {
 
 function Invoke-ExeUninstall {
     param($AppDef)
-    $uninstallPath = $AppDef.uninstall.path
+    # uninstall.path に %LocalAppData% 等の環境変数が含まれる per-user app に対応
+    $uninstallPath = Expand-EnvPath $AppDef.uninstall.path
     if (-not (Test-Path $uninstallPath)) {
         Write-Warning "EXE uninstaller not found: $uninstallPath"
         return "Failed (Uninstaller not found)"
     }
-    Write-Host "Running EXE uninstaller: $uninstallPath $($AppDef.uninstall.args)"
-    $process = Start-Process -FilePath $uninstallPath -ArgumentList $AppDef.uninstall.args -PassThru -Wait
+    $uninstallArgs = $AppDef.uninstall.args
+    Write-Host "Running EXE uninstaller: $uninstallPath $uninstallArgs"
+    $process = Start-Process -FilePath $uninstallPath -ArgumentList $uninstallArgs -PassThru -Wait
     if ($process.ExitCode -eq 0) {
         Write-Host "EXE uninstall completed (exit code: 0)"
         return "Success"
@@ -571,11 +573,23 @@ try {
         if ($clean) { $summary.CleanUpStatus = "Success" } else { $summary.CleanUpStatus = "Failed (Residue)" }
     }
 
+    # 後段ステップ (Uninstall / CleanUp) は throw しないため、ここで再評価して
+    # 1 つでも Failed なら throw して CI を fail させる。Detection / VersionCheck は
+    # 既に途中で throw 済みなのでここに来た時点では Pass / Skipped のいずれか。
+    $failedSteps = @()
+    if ($summary.UninstallStatus -like 'Failed*') { $failedSteps += 'Uninstall' }
+    if ($summary.CleanUpStatus   -like 'Failed*') { $failedSteps += 'CleanUp' }
+    if ($failedSteps.Count -gt 0) {
+        $summary.OverallResult = "FAIL ($($failedSteps -join ', '))"
+        throw "Verify failed at: $($failedSteps -join ', ')"
+    }
     $summary.OverallResult = "PASS"
 
 } catch {
     Write-Error $_
-    $summary.OverallResult = "FAIL"
+    if ($summary.OverallResult -notlike 'FAIL*') {
+        $summary.OverallResult = "FAIL"
+    }
     exit 1
 } finally {
     Write-Host ""
