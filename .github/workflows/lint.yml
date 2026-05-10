@@ -17,6 +17,11 @@ on:
       - '.github/actions/**'
       - '.githooks/**'
 
+# 同一 ref で実行中の run があれば cancel する (PR は HEAD push 連打、master は短時間連続 merge を想定)
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   ps-syntax:
     name: PowerShell syntax

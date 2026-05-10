@@ -2,12 +2,27 @@ name: script-based-verify-apps
 
 on:
   workflow_dispatch:
+  # lint workflow が master で完走したら起動 (master へ merge → lint pass → ここが走る)。
+  # workflow_run トリガーは paths: filter を持てないが、lint.yml 側のパスフィルタが
+  # 効くため、apps/scripts/.github 系の変更時のみ連鎖する。
+  workflow_run:
+    workflows: [lint]
+    branches: [master]
+    types: [completed]
   # schedule:
   #   - cron: '0 0 * * *'
+
+# 同一 ref で実行中の run があれば cancel する。matrix 全体を巻き込んで止まる。
+concurrency:
+  group: script-based-verify-apps-${{ github.event.workflow_run.head_branch || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   discover-apps:
     runs-on: ubuntu-latest
+    # workflow_run 経由で来たときは lint が success の場合のみ動く。
+    # workflow_dispatch / その他のイベントは無条件に動く。
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     outputs:
       app_matrix: ${{ steps.set-matrix.outputs.app_matrix }}
     steps:
