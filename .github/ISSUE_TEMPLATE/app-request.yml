@@ -1,0 +1,77 @@
+name: アプリ追加リクエスト
+description: 新規アプリを apps/*.yml に追加してほしい依頼。add-intune-app skill が必要とする情報を集める。
+title: "feat: <app名> を追加"
+labels: ["enhancement", "app-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Claude Code に `/add-intune-app` を投げる際の入力情報をここに集めます。
+        分からない項目は「未確認」のまま提出して構いません。Claude が `intune-app-researcher` agent で裏取りします。
+
+  - type: input
+    id: app_name
+    attributes:
+      label: アプリ名 (yml ファイル名にもなる)
+      description: 半角英数小文字とアンダースコアのみ。例 `gyazo_teams` / `okta_verify`
+      placeholder: foo_bar
+    validations:
+      required: true
+
+  - type: input
+    id: download_url
+    attributes:
+      label: ダウンロード URL
+      description: 公式配布元の URL。`curl -sIL <url>` で 200 を返すことが PR 提出前に必要
+      placeholder: https://example.com/setup.exe
+    validations:
+      required: true
+
+  - type: dropdown
+    id: installer_type
+    attributes:
+      label: インストーラ形式 (推測で OK)
+      options:
+        - 未確認
+        - MSI
+        - EXE (Inno Setup)
+        - EXE (NSIS)
+        - MSIX
+        - Bootstrapper (WiX 等)
+        - その他
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install_behavior
+    attributes:
+      label: Intune Install behavior (per-machine か per-user か)
+      description: 不明なら「未確認」。Setup.exe の `requestedExecutionLevel` が `asInvoker` なら user、それ以外は system が多い
+      options:
+        - 未確認
+        - system (per-machine、C:\Program Files 系)
+        - user (per-user、%LocalAppData% 配下)
+    validations:
+      required: true
+
+  - type: textarea
+    id: purpose
+    attributes:
+      label: 用途・特記事項 (任意)
+      description: 業務での使い道、優先度、過去の運用メモなど。CLAUDE.md の「やってはいけない」ルールに該当する場合 (Microsoft Store 配布あり、商用ライセンス等) はここで申告
+
+  - type: textarea
+    id: links
+    attributes:
+      label: 参考リンク (任意)
+      description: ベンダー公式ダウンロード ページ、release notes、配布ドキュメントなど
+
+  - type: checkboxes
+    id: prereqs
+    attributes:
+      label: 採用前提の確認
+      description: 該当しない場合はチェック不要 (リクエストを止める意図ではない)
+      options:
+        - label: Microsoft Store でも配布されているアプリではない (Store 配布アプリは Win32App 化しない方針)
+        - label: per-user Squirrel 系インストーラ ではない (Discord / GitHub Desktop 等)
+        - label: 商用ライセンスが要件にならない (Docker Desktop 大企業利用 / TeamViewer 業務利用 等)

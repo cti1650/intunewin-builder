@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: アプリ追加 skill (Claude Code)
+    url: https://github.com/cti1650/intunewin-builder/tree/master/.claude/skills/add-intune-app
+    about: 「アプリを追加してほしい」依頼を Claude Code 上で /add-intune-app として走らせる場合のフロー説明。Issue を立てずに直接やる場合の入口。
+  - name: ビルド失敗 debug skill (Claude Code)
+    url: https://github.com/cti1650/intunewin-builder/tree/master/.claude/skills/debug-build-failure
+    about: 「<アプリ> のインストールが落ちる」「Intune の検出ルールが効かない」等の調査フロー。Claude Code 上で /debug-build-failure として走らせる場合の入口。
+  - name: アプリ定義スキーマ / 運用ルール
+    url: https://github.com/cti1650/intunewin-builder/blob/master/.claude/CLAUDE.md
+    about: yml フィールド定義 / 採用判断基準 / やってはいけないこと / Defender 例外運用 などのリポジトリ共通ルール。

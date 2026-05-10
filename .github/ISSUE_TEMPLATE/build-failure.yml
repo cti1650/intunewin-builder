@@ -1,0 +1,70 @@
+name: ビルド失敗報告
+description: build-and-verify-intunewin / script-based-verify などの CI 失敗を切り分ける。debug-build-failure skill / intune-build-log-analyzer agent の入口。
+title: "fix: <app名> の <段階> 失敗"
+labels: ["bug", "ci-failure"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        失敗した workflow run の URL があれば貼ってください。Claude が intune-build-log-analyzer agent でログを取りに行きます。
+
+  - type: input
+    id: run_url
+    attributes:
+      label: 失敗した workflow run の URL
+      description: Actions タブから run ページを開いて URL をコピー
+      placeholder: https://github.com/cti1650/intunewin-builder/actions/runs/...
+    validations:
+      required: true
+
+  - type: input
+    id: app_name
+    attributes:
+      label: 対象アプリ
+      placeholder: ovice / chrome / gyazo_teams など
+    validations:
+      required: true
+
+  - type: dropdown
+    id: stage
+    attributes:
+      label: 失敗段階 (verify サマリで最初に Failed になった行)
+      description: VERIFICATION SUMMARY テーブルの InstallStatus / DetectionStatus / VersionCheck / UninstallStatus / CleanUpStatus を上から見て、最初に Failed になっている行
+      options:
+        - 未確認
+        - Download
+        - Build (IntuneWinAppUtil)
+        - Install
+        - Detect
+        - VersionCheck
+        - Uninstall
+        - CleanUp
+        - その他
+    validations:
+      required: true
+
+  - type: dropdown
+    id: reproducibility
+    attributes:
+      label: 再現性
+      options:
+        - 未確認
+        - 毎回失敗
+        - 1 回目失敗、再実行で通る (flaky)
+        - 特定 Azure region でのみ
+        - 特定の commit からのみ
+    validations:
+      required: true
+
+  - type: textarea
+    id: log_excerpt
+    attributes:
+      label: 関連ログ抜粋 (任意)
+      description: VERIFICATION SUMMARY や exit code 周辺、`WARNING:` `Hint:` 行などをコピペ
+      render: text
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: 追加メモ (任意)
+      description: 直近の関連 PR、yml の変更点、心当たりのある原因など
