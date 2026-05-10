@@ -35,6 +35,7 @@ Intune 自体はブラックボックスとして扱い、
 | **Zoom Workplace** | MSI (64-bit) | system | レジストリ | 表示名検出 / 自動更新ON |
 | **AWS CLI v2** | MSI (64-bit) | system | ファイルパス | クラウドエンジニア向け CLI |
 | **Gyazo** | EXE (InnoSetup) | system | ファイルパス | スクリーンショット共有ツール |
+| **Gyazo Teams** | EXE (InnoSetup) | system | ファイルパス | Gyazo の Teams プラン向けクライアント (`GyazoTeams.exe`) |
 | **ovice** | EXE (NSIS) | **user** | レジストリ | per-user installer (`%LocalAppData%\Programs\ovice`) |
 | **Okta Verify** | EXE (Bootstrapper) | system | ファイルパス | URL に `YOUR_ORGANIZATION` placeholder。手動 dispatch 専用 |
 | **Company Portal Shortcut** | カスタム PowerShell | system | ファイルパス (.lnk) | Public Desktop にポータルサイトのショートカットを作成 |

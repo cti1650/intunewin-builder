@@ -1,0 +1,30 @@
+name: gyazo_teams
+
+download:
+  url: https://files.gyazo.com/setup/GyazoTeams-5.9.exe
+  file: GyazoTeams-5.9.exe
+
+installer:
+  type: exe
+  install_args: "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
+
+detect:
+  file: "C:\\Program Files (x86)\\Gyazo Teams\\GyazoTeams.exe"
+  # Inno Setup 5.6.0 unicode "Gyazo Teams 5.9.0.0" (innoextract -i で確認)
+  version: "5.9.0.0"
+  registry_display_name: "Gyazo Teams"
+
+uninstall:
+  type: exe
+  path: "C:\\Program Files (x86)\\Gyazo Teams\\unins000.exe"
+  args: "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
+
+# Intune Win32 App 登録時の参照値 (verify-installer / build スクリプトの動作には不要)
+intune:
+  install_behavior: system
+  install_command: "GyazoTeams-5.9.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-"
+  uninstall_command: "\"C:\\Program Files (x86)\\Gyazo Teams\\unins000.exe\" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART"
+  detection:
+    type: file
+    path: "C:\\Program Files (x86)\\Gyazo Teams"
+    file: "GyazoTeams.exe"
