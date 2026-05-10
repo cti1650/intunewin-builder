@@ -164,6 +164,44 @@ VersionCheck は `[version]'<installed>' -ge [version]'<pinned>'` で評価さ�
 2. verify サマリの `InstalledVersion` 行を見る (例: `InstalledVersion: 147.0.7727.138`)
 3. その値をそのまま `detect.version` に書き、別 commit で push して PR 更新
 
+### `detect.file` の値も実機 install path を信頼する (version と同じ原則)
+
+ベンダーのドキュメントから推定した install path が**実機と乖離する**ケースが本リポジトリでは複数発生している:
+
+- **Gyazo Teams** ([apps/gyazo_teams.yml](../../../apps/gyazo_teams.yml)): "Gyazo Teams" 専用 dir を予想したが、実際は **regular Gyazo と install dir を共有** (`C:\Program Files (x86)\Gyazo\GyazoTeams.exe`)。Inno Setup の `DefaultDirName` が公開ドキュメントから読み取れず、innoextract でも内部 script を抽出できないため最終確定は CI 必須だった
+- **Gyazo Teams (per-user 誤判定)**: 1 巡目の CI で「Not in Program Files」と出たため per-user (`%LocalAppData%`) と誤判定したが、実は **per-machine** (上記の通り)。CI の `Hint: registry InstallLocation = ...` 行が次の修正の決め手になった
+
+運用フロー:
+
+1. ベンダー想定の path で yml を作って CI を回す
+2. 失敗したら verify サマリの `InstallPath` と Write-Host の `Hint: registry InstallLocation = ...` を読む
+3. registry `InstallLocation` を信頼ソースにして `detect.file` を上書き
+4. **path から `install_behavior` を機械的に決めない** (Program Files 配下でも per-user 設計の installer はあり得る)。`requestedExecutionLevel` や `PrivilegesRequired` を確認、UAC 昇格を要求しない (`asInvoker`) なら per-user 確定
+
+### per-user installer (install_behavior: user) の追加要件
+
+ovice ([apps/ovice.yml](../../../apps/ovice.yml)) のように `install_behavior: user` で配信する app は:
+
+- **`detect.file` / `uninstall.path` には `%LocalAppData%` プレースホルダを必ず使う** (verify-installer は `Expand-EnvPath` で実パスに解決)
+- **Intune の File-based detection rule は `%LocalAppData%` を解釈しない**ため、yml の `intune.detection` には Custom Detection Script を同梱する。テンプレ:
+
+```yaml
+intune:
+  install_behavior: user
+  install_command: "<setup>.exe /S"
+  uninstall_command: "\"%LocalAppData%\\Programs\\<vendor>\\Uninstall.exe\" /S"
+  detection:
+    type: custom_script
+    script: |
+      if (Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\<vendor>\<app>.exe')) {
+          Write-Output 'Detected'
+          exit 0
+      }
+      exit 1
+```
+
+operator は Intune UI の "Detection rules > Use a custom detection script" にこの script をそのまま貼り付ける。File-based detection rule で代替する道は無い (Microsoft 公式が user-context app に Custom Script を推奨)。
+
 ## 引数組み立てチェックリスト
 
 PR を出す前に以下を全部確認:

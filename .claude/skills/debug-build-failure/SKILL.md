@@ -60,6 +60,7 @@ IntuneWinAppUtil.exe ... exit code <non-zero>
 | **1605** | 該当製品が未インストール | uninstall 経路で出ることが多い (= 検出が誤って install 済と判定) |
 | **3010** | 成功 + reboot 要求 | `/norestart` 指定済か確認。build-intunewin はこのコードを成功扱いすべき (要確認) |
 | **1641** | 成功 + 自動 reboot 開始 | 同上 |
+| **-1073741819** (`0xC0000005`) | ACCESS_VIOLATION | NSIS 系 Setup.exe の子プロセス起動が **Windows Defender real-time scanning と衝突**。リポジトリは `scripts/generic-install.ps1` と `scripts/verify-installer.ps1` の EXE 経路に `Add-MpPreference -ExclusionPath` (CI 限定) を仕込んで対処済み。新規 EXE 系 install 経路を作るときは `$env:GITHUB_ACTIONS -eq 'true'` ガード付きで同パターンを必ず入れる。Azure 特定 region (northcentralus 等) で再現性が高い |
 
 EXE は engine ごとにコード体系が違う。Inno Setup なら `/LOG` を付けて `%TEMP%\Setup Log*.txt` を出す手もある。
 
@@ -87,19 +88,23 @@ DetectionStatus: Failed
 ### Uninstall 失敗
 
 ```
-UninstallStatus: Failed
+UninstallStatus: Failed (Uninstaller not found)
+or
+UninstallStatus: Failed (No ProductCode)
 ```
 
 **根本原因の候補**:
 
 - `uninstall.type: msi` だが ProductCode が registry に無い (= MSI 経由でなく EXE インストーラだった)
 - `uninstall.path` の絶対パスが `Program Files` / `Program Files (x86)` の片側にしか合っていない
+- `uninstall.path` に `%LocalAppData%` 等の環境変数を入れたが、verify-installer の `Invoke-ExeUninstall` が展開しないバージョンだった (PR #35 で修正済、過去 yml の path はそのまま動く想定)
 - WiX Bootstrapper で UninstallString が `MsiExec.exe /X{...}` 形式 → `registry_string` 型を使うべき (okta_verify 参照)
 
 **対処**:
 
 1. `uninstall.type` をインストーラ engine に合わせる (MSI → msi、Inno → exe + unins000.exe、Bootstrapper → registry_string)
 2. okta_verify 方式の registry_string + process_name の運用が必要なら [scripts/verify-installer.ps1](../../../scripts/verify-installer.ps1) を参照
+3. **Uninstall / CleanUp Failed は `OverallResult: FAIL (Uninstall, ...)` に伝播し CI が exit 1 する** (PR #35 改善後)。緑判定で見逃されないため、verify サマリで Uninstall/CleanUp 行が "Success" になっているかも併せて確認
 
 ### CleanUp 失敗
 
