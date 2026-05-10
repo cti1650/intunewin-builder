@@ -64,3 +64,97 @@ jobs:
         run: bash <(curl --silent --show-error --fail https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
       - name: Run actionlint
         run: ${{ steps.actionlint.outputs.executable }} -color
+
+  # ==========================================================================
+  # 以下、master push 時のみ走る後段ジョブ。
+  # 直前 commit の差分から「触られた app」だけを matrix に絞って verify する。
+  # apps/<x>.yml or scripts/apps/<x>/** が変更されていなければ何も走らない。
+  # ==========================================================================
+
+  detect-affected-apps:
+    name: detect affected apps from diff
+    needs: [ps-syntax, apps-schema, choice-list, actionlint]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    outputs:
+      normal_apps: ${{ steps.detect.outputs.normal_apps }}
+      script_based_apps: ${{ steps.detect.outputs.script_based_apps }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 2  # 直前 commit との diff を取るため
+
+      - name: Install powershell-yaml
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module powershell-yaml -Scope CurrentUser -Force
+
+      - name: Detect affected apps
+        id: detect
+        shell: pwsh
+        run: |
+          $changed = git diff --name-only HEAD~1 HEAD
+          Write-Host "Changed files:"
+          $changed | ForEach-Object { Write-Host "  $_" }
+
+          $normal       = New-Object System.Collections.Generic.HashSet[string]
+          $scriptBased  = New-Object System.Collections.Generic.HashSet[string]
+
+          foreach ($f in $changed) {
+            # apps/<name>.yml が変更された場合
+            if ($f -match '^apps/([^/]+)\.yml$') {
+              $name = $Matches[1]
+              $ymlPath = "apps/$name.yml"
+              if (-not (Test-Path $ymlPath)) { continue }  # 削除されたら検証不能なのでスキップ
+              $def = Get-Content $ymlPath | ConvertFrom-Yaml
+              if ($def.script_based -eq $true) {
+                [void]$scriptBased.Add($name)
+              } else {
+                if ($def.download.url -and $def.download.url -match 'YOUR_[A-Z_]+') {
+                  Write-Host "Skipping $name (URL placeholder)"
+                  continue
+                }
+                [void]$normal.Add($name)
+              }
+              continue
+            }
+            # scripts/apps/<name>/** が変更された場合 (custom_script 系)
+            if ($f -match '^scripts/apps/([^/]+)/') {
+              $name = $Matches[1]
+              $ymlPath = "apps/$name.yml"
+              if (-not (Test-Path $ymlPath)) { continue }
+              $def = Get-Content $ymlPath | ConvertFrom-Yaml
+              if ($def.script_based -eq $true) {
+                [void]$scriptBased.Add($name)
+              }
+            }
+          }
+
+          $normalJson      = ConvertTo-Json -Compress @($normal)
+          $scriptBasedJson = ConvertTo-Json -Compress @($scriptBased)
+          if (-not $normalJson)      { $normalJson      = '[]' }
+          if (-not $scriptBasedJson) { $scriptBasedJson = '[]' }
+
+          Write-Host "Affected normal apps:       $normalJson"
+          Write-Host "Affected script_based apps: $scriptBasedJson"
+
+          "normal_apps=$normalJson"           | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "script_based_apps=$scriptBasedJson" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+  build-and-verify-apps:
+    name: build-and-verify (chained)
+    needs: detect-affected-apps
+    if: ${{ needs.detect-affected-apps.outputs.normal_apps != '[]' }}
+    uses: ./.github/workflows/build-and-verify-apps.yml
+    with:
+      apps_json: ${{ needs.detect-affected-apps.outputs.normal_apps }}
+
+  script-based-verify-apps:
+    name: script-based-verify (chained)
+    needs: detect-affected-apps
+    if: ${{ needs.detect-affected-apps.outputs.script_based_apps != '[]' }}
+    uses: ./.github/workflows/script-based-verify-apps.yml
+    with:
+      apps_json: ${{ needs.detect-affected-apps.outputs.script_based_apps }}
