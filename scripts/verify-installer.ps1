@@ -339,6 +339,17 @@ try {
                 throw
             }
         } else {
+            # CI 環境では Defender real-time scanning が NSIS 系インストーラの子プロセス起動と
+            # 衝突して 0xC0000005 (-1073741819) で死ぬことがある (Azure 特定 region 多発)。
+            # generic-install.ps1 (script_based 経路) では PR #22 で対処済み、こちらは traditional 経路。
+            # エンドユーザー端末では発火させない。
+            if ($env:GITHUB_ACTIONS -eq 'true') {
+                try {
+                    $exclDir = Split-Path -Parent $installerPath
+                    Add-MpPreference -ExclusionPath $exclDir -ErrorAction SilentlyContinue
+                    Write-Host "Added Defender exclusion for: $exclDir"
+                } catch { }
+            }
             Write-Host "Running EXE installer: $installerPath $installArgs"
             $process = Start-Process -FilePath $installerPath -ArgumentList $installArgs -PassThru
             if (-not $process.WaitForExit($timeoutSeconds * 1000)) { $process | Stop-Process -Force; throw "EXE Installation Timed Out" }
