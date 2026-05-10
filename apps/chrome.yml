@@ -10,8 +10,9 @@ installer:
 
 detect:
   file: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
-  # 2026-05-10 時点で x64 / ARM64 とも stable は 148.0.7778.97
-  version: "148.0.7778.97"
+  # Chrome Enterprise MSI は consumer stable channel から 1〜2 マイナー遅延する。
+  # 2026-05-10 時点で MSI 配布版は 147.0.7727.138 (consumer stable は 148.0.7778.97)。
+  version: "147.0.7727.138"
   registry_display_name: "Google Chrome"
 
 uninstall:
