@@ -1,0 +1,33 @@
+# NOTE: Slack本体のインストールは行わず、実行ユーザの Desktop に
+#       Microsoft Store版 Slack へのショートカットだけを作る (user コンテキスト版)。
+#       本体は Microsoft Store 配信 (Intune の "Microsoft Store app (new)") で配布する想定。
+#       SYSTEM 権限不要のため、管理者権限のない端末・ローカル動作確認でも実行可能。
+name: slack_shortcut_user
+
+script_based: true
+custom_script: true
+
+installer:
+  type: script
+  script: install.ps1
+
+uninstall:
+  type: script
+  script: uninstall.ps1
+
+detect:
+  # user コンテキストでは %UserProfile%\Desktop を Expand-EnvPath で展開する。
+  file: "%UserProfile%\\Desktop\\Slack.lnk"
+
+# ==========
+# Intune Win32アプリ設定値（参照用）
+# ==========
+intune:
+  # 実行ユーザの Desktop への書き込みは user 権限で完結するため user
+  install_behavior: user
+  install_command: "powershell.exe -ExecutionPolicy Bypass -File install.ps1"
+  uninstall_command: "powershell.exe -ExecutionPolicy Bypass -File uninstall.ps1"
+  detection:
+    type: file
+    path: "%UserProfile%\\Desktop"
+    file: "Slack.lnk"
