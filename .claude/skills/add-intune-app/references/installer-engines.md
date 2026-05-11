@@ -111,6 +111,82 @@ uninstall:
 
 PS1 は `scripts/apps/<name>/` 配下に置く。実例: [apps/company_portal_shortcut.yml](../../../apps/company_portal_shortcut.yml) と [scripts/apps/company_portal_shortcut/](../../../scripts/apps/company_portal_shortcut/)
 
+### UWP / Store 版アプリへのショートカット作成パターン
+
+Microsoft Store 配信の UWP アプリへのデスクトップショートカットを作る場合、起動方式は以下の優先順で選ぶ:
+
+| 優先 | 起動方式 | 採用条件 | 例 |
+|---|---|---|---|
+| 1 | **専用 URI プロトコル** | アプリが `HKCR\<scheme>` を登録している (deep-linking 公式サポートあり) | `slack://open` / `companyportal:` / `msword:` / `onedrive:` |
+| 2 | `shell:AppsFolder\<PFN>!<AppId>` フォールバック | URI ハンドラが無い UWP のみ | (該当なし。まずは URI を探すこと) |
+
+**理由**: `shell:AppsFolder\...!<AppId>` の AUMID 解決は SYSTEM コンテキスト・パッケージ更新後の `InstallLocation` 変動・OS バージョンで壊れる。AUMID の末尾 (`!App` `!Slack` 等) は AppxManifest の `Application.Id` 由来でアプリごとに異なり、推測で書くと**クリックしても起動しない**。一方 URI スキームは Explorer がシェル経由で解決するので AUMID 変動の影響を受けない。
+
+**確認済み URI スキーム**:
+
+| アプリ | URI | 出典 |
+|---|---|---|
+| Slack (Store 版 / Desktop 版共通) | `slack://open` | [Slack Deep Linking Docs](https://docs.slack.dev/interactivity/deep-linking/) |
+| Microsoft Company Portal | `companyportal:` | [Microsoft Q&A](https://learn.microsoft.com/en-us/answers/questions/544416/company-portal-link-to-app) |
+
+**実装テンプレ** (install.ps1 骨格):
+
+```powershell
+$ErrorActionPreference = "Stop"
+
+$AppxName  = "<Package Name>"   # e.g. 91750D7E.Slack, Microsoft.CompanyPortal
+$LaunchUri = "<scheme>://open"  # e.g. slack://open, companyportal:
+$MainExe   = "<MainExe>"        # e.g. Slack, CompanyPortal (アイコン引き当て用)
+# system 版: $ShortcutPath = "$env:PUBLIC\Desktop\<name>.lnk"
+# user 版:   $ShortcutPath = Join-Path ([Environment]::GetFolderPath('Desktop')) "<name>.lnk"
+
+$WshShell = New-Object -ComObject WScript.Shell
+$Shortcut = $WshShell.CreateShortcut($ShortcutPath)
+$Shortcut.TargetPath  = "$env:WINDIR\explorer.exe"
+$Shortcut.Arguments   = $LaunchUri
+$Shortcut.Description = "<description>"
+
+# アイコン解決: 3 段フォールバック
+# explorer.exe を TargetPath にすると既定がフォルダ風アイコンになるため、
+# UWP 本体 EXE のリソースから引き当てる必要がある。
+$iconPath = $null
+# system 版: Get-AppxPackage -AllUsers / user 版: Get-AppxPackage (引数なし)
+$appx = Get-AppxPackage -AllUsers -Name $AppxName -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($appx) {
+    # 第1: AppxManifest.xml の Application.Executable (理想形)
+    try {
+        [xml]$m = Get-Content -LiteralPath (Join-Path $appx.InstallLocation "AppxManifest.xml") -ErrorAction Stop
+        $exe = ($m.Package.Applications.Application | Select-Object -First 1).Executable
+        if ($exe) {
+            $c = Join-Path $appx.InstallLocation $exe
+            if (Test-Path -LiteralPath $c) { $iconPath = $c }
+        }
+    } catch {}
+    # 第2: InstallLocation\<MainExe>.exe を直接 (AppxManifest が空・読めない時)
+    if (-not $iconPath) {
+        $c = Join-Path $appx.InstallLocation "$MainExe.exe"
+        if (Test-Path -LiteralPath $c) { $iconPath = $c }
+    }
+    # 第3: <MainExe>*.exe を glob (バージョン入り EXE 名のとき)
+    if (-not $iconPath) {
+        $c = Get-ChildItem -LiteralPath $appx.InstallLocation -Filter "$MainExe*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($c) { $iconPath = $c.FullName }
+    }
+}
+if ($iconPath) { $Shortcut.IconLocation = "$iconPath,0" }
+
+$Shortcut.Save()
+```
+
+**注意点**:
+
+- **日本語ファイル名 (例: `ポータルサイト.lnk`)** は en-US Windows などシステムロケールに含まれない文字を含むパスで `WScript.Shell.Save()` が不安定。ASCII 一時パスに保存してから `Move-Item` で本来のパスに移す ([scripts/apps/company_portal_shortcut/install.ps1](../../../scripts/apps/company_portal_shortcut/install.ps1) 参照)
+- **system 版 / user 版の両方を作るのが基本** (`<name>_shortcut.yml` と `<name>_shortcut_user.yml`)。system 版は `$env:PUBLIC\Desktop\`、user 版は `[Environment]::GetFolderPath('Desktop')` (リダイレクト追従)
+- **`Get-AppxPackage` の引数**: system 版は `-AllUsers` を付ける (SYSTEM 自体は AppX を持たないため)、user 版は引数なしで現在ユーザのプロビジョン状態を見る
+- **エラー時の exit code は `1618`** (MSI retry code: Intune に再試行させる)。`exit 1` は永久失敗扱いされる
+
+**実例**: [scripts/apps/slack_shortcut/install.ps1](../../../scripts/apps/slack_shortcut/install.ps1)、[scripts/apps/company_portal_shortcut/install.ps1](../../../scripts/apps/company_portal_shortcut/install.ps1)
+
 ## アンインストール特殊型
 
 ### registry_string
