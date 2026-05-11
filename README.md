@@ -39,7 +39,9 @@ Intune 自体はブラックボックスとして扱い、
 | **ovice** | EXE (NSIS) | **user** | レジストリ | per-user installer (`%LocalAppData%\Programs\ovice`) |
 | **Okta Verify** | EXE (Bootstrapper) | system | ファイルパス | URL に `YOUR_ORGANIZATION` placeholder。手動 dispatch 専用 |
 | **Company Portal Shortcut** | カスタム PowerShell | system | ファイルパス (.lnk) | Public Desktop にポータルサイトのショートカットを作成 |
+| **Company Portal Shortcut (user)** | カスタム PowerShell | **user** | ファイルパス (.lnk) | 実行ユーザの Desktop に作成。SYSTEM 権限不要・ローカル動作確認向け |
 | **Slack Shortcut** | カスタム PowerShell | system | ファイルパス (.lnk) | Public Desktop に Microsoft Store 版 Slack へのショートカットを作成 |
+| **Slack Shortcut (user)** | カスタム PowerShell | **user** | ファイルパス (.lnk) | 実行ユーザの Desktop に作成。SYSTEM 権限不要・ローカル動作確認向け |
 
 `Install Behavior` は Intune の Win32 App 設定 "Install behavior" にそのまま入れる値 (`system` または `user`)。[apps/*.yml](apps/) の `intune.install_behavior` フィールドが情報源。
 

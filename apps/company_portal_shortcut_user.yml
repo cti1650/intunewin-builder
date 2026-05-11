@@ -1,0 +1,36 @@
+# NOTE: ダウンロード不要のカスタムスクリプト型アプリ (user コンテキスト版)。
+#       実行ユーザの Desktop ([Environment]::GetFolderPath('Desktop')) に
+#       Microsoft Company Portal へのショートカットを作成する。
+#       SYSTEM 権限不要のため、管理者権限のない端末・ローカル動作確認でも実行可能。
+name: company_portal_shortcut_user
+
+script_based: true
+custom_script: true
+
+# custom_script: true の場合、scripts/apps/<name>/install.ps1 を
+# そのまま .intunewin に同梱して Intune から実行する。
+installer:
+  type: script
+  script: install.ps1
+
+uninstall:
+  type: script
+  script: uninstall.ps1
+
+detect:
+  # ショートカット (.lnk) の存在を Intune の検出ルールに使う。
+  # user コンテキストでは %UserProfile%\Desktop を Expand-EnvPath で展開する。
+  file: "%UserProfile%\\Desktop\\ポータルサイト.lnk"
+
+# ==========
+# Intune Win32アプリ設定値（参照用）
+# ==========
+intune:
+  # 実行ユーザの Desktop への書き込みは user 権限で完結するため user
+  install_behavior: user
+  install_command: "powershell.exe -ExecutionPolicy Bypass -File install.ps1"
+  uninstall_command: "powershell.exe -ExecutionPolicy Bypass -File uninstall.ps1"
+  detection:
+    type: file
+    path: "%UserProfile%\\Desktop"
+    file: "ポータルサイト.lnk"
