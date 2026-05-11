@@ -110,6 +110,8 @@ intune:
 
 EXE / MSIX / 特殊ケースの引数は [references/installer-engines.md](references/installer-engines.md) を参照。`detect.version` の値選びは特に注意 (consumer stable と Enterprise MSI が乖離するケースあり) — 同 references 内「`detect.version` の値選びの注意」を必読。
 
+**UWP / Store 版アプリへのデスクトップショートカット系**を追加する場合 (Slack、Company Portal 等) は、 references 内「UWP / Store 版アプリへのショートカット作成パターン」に従う。特に **専用 URI プロトコル (`slack://open`、`companyportal:` 等) を優先採用** すること。`shell:AppsFolder\<PFN>!<AppId>` 方式は AUMID 解決が SYSTEM コンテキストで壊れて「クリックしても起動しない」事象が出る。
+
 ### 4. build-and-verify.yml の choice options を更新
 
 [.github/workflows/build-and-verify.yml](../../.github/workflows/build-and-verify.yml) の `inputs.app.options` に **通常版のみ** をアルファベット順で追加。
