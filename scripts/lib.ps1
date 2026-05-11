@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   CI 側 (build / verify) で共有する PowerShell ヘルパー群。
 

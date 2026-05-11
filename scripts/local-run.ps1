@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   apps/<App>.yml を読み、Install または Uninstall を端末上で実行する。
   Intune も .intunewin パッケージングも経由しないローカル動作確認用エントリポイント。

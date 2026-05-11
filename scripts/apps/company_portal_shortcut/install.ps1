@@ -1,13 +1,12 @@
 ﻿$ErrorActionPreference = "Stop"
 
 $AppxName     = "Microsoft.CompanyPortal"
-# Slack 等の一般 UWP と違い、Company Portal は独自 URI プロトコル "companyportal:" を
-# OS に登録している。shell:AppsFolder\...!<AppId> 経由だと SYSTEM コンテキスト・OS
-# バージョン・パッケージ更新後の InstallLocation 変動で AUMID 解決が壊れるケースが
-# あるため、こちらは公式 URI スキームで起動する形に統一する。
+$MainExe      = "CompanyPortal"
+# Company Portal は HKCR\companyportal に URI ハンドラを登録しているので、
+# PowerShell の Start-Process 経由で起動する。
 $LaunchUri    = "companyportal:"
-$ShortcutPath = "$env:PUBLIC\Desktop\ポータルサイト.lnk"
 $Description  = "社内アプリのインストールはこちらから"
+$ShortcutPath = "$env:PUBLIC\Desktop\ポータルサイト.lnk"
 
 # Public Desktop が無い環境(GitHub Actionsランナー等)に備えて親ディレクトリを保証
 $ShortcutDir = Split-Path -Parent $ShortcutPath
@@ -16,21 +15,8 @@ if (-not (Test-Path $ShortcutDir)) {
 }
 
 try {
-    # WScript.Shell の Save() は en-US Windows などシステムロケールに含まれない
-    # 文字を含むパスでは安定しない (例: ja の "ポータルサイト.lnk")。
-    # 一旦 ASCII パスに保存してから NTFS の Move-Item で本来のパスへ移す。
-    $TempShortcut = Join-Path $env:TEMP "_companyportal_shortcut.lnk"
-    $WshShell = New-Object -ComObject WScript.Shell
-    $Shortcut = $WshShell.CreateShortcut($TempShortcut)
-
-    # explorer.exe + "companyportal:" URI で起動。URI ハンドラは HKCR\companyportal
-    # に登録されているので Explorer がシェル経由で UWP を呼び出してくれる。
-    $Shortcut.TargetPath  = "$env:WINDIR\explorer.exe"
-    $Shortcut.Arguments   = $LaunchUri
-    $Shortcut.Description = $Description
-
-    # explorer.exe をターゲットにすると既定でフォルダ風アイコンになるため、
-    # UWP本体の実行ファイル (CompanyPortal.exe) から IconLocation を引き当てる。
+    # アイコン解決: 3 段フォールバック
+    # UWP 本体 EXE (CompanyPortal.exe) のリソースから引き当てる。
     # (App更新で InstallLocation のバージョン部分が変わると壊れる点は許容)
     $iconPath = $null
     $appx = Get-AppxPackage -AllUsers -Name $AppxName -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -53,26 +39,43 @@ try {
         }
         # 第2候補: InstallLocation\CompanyPortal.exe を直接
         if (-not $iconPath) {
-            $candidate = Join-Path $appx.InstallLocation "CompanyPortal.exe"
+            $candidate = Join-Path $appx.InstallLocation "$MainExe.exe"
             if (Test-Path -LiteralPath $candidate) {
                 $iconPath = $candidate
             }
         }
         # 第3候補: CompanyPortal*.exe を glob で拾う
         if (-not $iconPath) {
-            $candidate = Get-ChildItem -LiteralPath $appx.InstallLocation -Filter "CompanyPortal*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+            $candidate = Get-ChildItem -LiteralPath $appx.InstallLocation -Filter "$MainExe*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
             if ($candidate) {
                 $iconPath = $candidate.FullName
             }
         }
     }
+
+    # .lnk 作成。
+    # TargetPath = powershell.exe (固定パス)、 Arguments = -Command "Start-Process '<uri>'"。
+    # Arguments に URI を直接書く (例: "companyportal:") と WScript.Shell.Save() が URL
+    # Shortcut と誤判定して TargetPath を破棄する罠があるため、 PowerShell オプション
+    # 形式 (-Command "...") で URI を包んで前置きすることで URL Shortcut 判定を回避する。
+    # WindowStyle = 7 (Minimized) で PowerShell ウィンドウは表示されない。
+    #
+    # WScript.Shell の Save() は en-US Windows などシステムロケールに含まれない
+    # 文字を含むパスでは安定しないので (例: ja の "ポータルサイト.lnk")、
+    # ASCII 一時パスに保存してから Move-Item で本来のパスへ移す。
+    $TempShortcut = Join-Path $env:TEMP "_companyportal_shortcut.lnk"
+    $WshShell = New-Object -ComObject WScript.Shell
+    $Shortcut = $WshShell.CreateShortcut($TempShortcut)
+    $Shortcut.TargetPath  = "$env:WINDIR\System32\WindowsPowerShell\v1.0\powershell.exe"
+    $Shortcut.Arguments   = "-NoProfile -WindowStyle Hidden -Command `"Start-Process '$LaunchUri'`""
+    $Shortcut.Description = $Description
+    $Shortcut.WindowStyle = 7
     if ($iconPath) {
         $Shortcut.IconLocation = "$iconPath,0"
         Write-Host "Icon set to: $iconPath"
     } else {
         Write-Warning "$AppxName icon could not be resolved; shortcut will use default icon"
     }
-
     $Shortcut.Save()
 
     Move-Item -LiteralPath $TempShortcut -Destination $ShortcutPath -Force
