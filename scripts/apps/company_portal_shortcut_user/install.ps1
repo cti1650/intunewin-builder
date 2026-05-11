@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $AppxName     = "Microsoft.CompanyPortal"
 $MainExe      = "CompanyPortal"

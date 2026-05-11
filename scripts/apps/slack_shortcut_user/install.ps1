@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 # Microsoft Store版 Slack
 # - Package Name: 91750D7E.Slack

@@ -89,6 +89,17 @@ URL HEAD で 200 が返るかは PR 前に手元で `curl -sIL <url>` で必ず�
 
 lint 完走後、`detect-affected-apps` ジョブが diff から「変更された app」だけを matrix に絞って `build-and-verify-apps` / `script-based-verify-apps` を chain 実行する。**master push と PR push の両方で発火**し、関係ない変更 (例: README のみ) では何も走らない。連続 push は cancel-in-progress であと優先。
 
+## PowerShell スクリプトのエンコーディング規約
+
+**`.ps1` / `.psm1` / `.psd1` は BOM 付き UTF-8 でチェックインする**。
+
+CI Windows runner と Intune 実機の `powershell.exe` (Windows PowerShell 5.1) は BOM 無し UTF-8 を Console code page (en-US 環境では CP1252) として解釈するため、日本語リテラルを含む .ps1 が mojibake してパースエラーになる (実例: [PR #44](https://github.com/cti1650/intunewin-builder/pull/44))。
+
+- 新規作成・編集後は **`head -c 3 <file>.ps1 | xxd -p` が `efbbbf` で始まる**ことを確認
+- BOM 付与が漏れているファイルは `(printf '\xEF\xBB\xBF'; cat <file>) > <file>.tmp && mv <file>.tmp <file>` で付与
+- `.gitattributes` の `working-tree-encoding=UTF-8-BOM` は macOS Git の iconv 制約で commit 不能になるため不採用。ファイル自体に BOM を保持する運用とする
+- ASCII のみの .ps1 (日本語リテラルなし) にも一貫性のため BOM を付ける
+
 ## CI 限定の Defender 例外ルール
 
 `scripts/generic-install.ps1` と `scripts/verify-installer.ps1` の **EXE インストーラ起動箇所**には、`$env:GITHUB_ACTIONS -eq 'true'` ガード付きで `Add-MpPreference -ExclusionPath` を仕込んである。Azure 特定 region (northcentralus 等) で NSIS 系 Setup.exe の子プロセス起動が Defender real-time scanning と衝突して `0xC0000005` (`-1073741819` ACCESS_VIOLATION) で死ぬ flaky を回避する目的。

@@ -1,0 +1,21 @@
+# 改行コードは Git に自動判定させる (Windows: CRLF, Unix: LF にチェックアウト)
+* text=auto
+
+# ----------------------------------------------------------------------
+# PowerShell スクリプトのエンコーディング規約
+# ----------------------------------------------------------------------
+# Windows PowerShell 5.1 (CI Windows runner ・ Intune 実機の `powershell.exe`) は
+# BOM 無し UTF-8 を Console code page (en-US 環境では CP1252) として解釈するため、
+# 日本語リテラルを含む .ps1 が mojibake してパースエラーになる。
+#
+# 対策: .ps1 / .psm1 / .psd1 は **BOM 付き UTF-8** でチェックインする。
+#       BOM はファイル自体に保持し、 commit したまま CI / 端末に渡す。
+#
+# Git の working-tree-encoding=UTF-8-BOM 属性も検討したが、 Apple Git の iconv 実装
+# が UTF-8-BOM 変換をサポートせず macOS 上で commit が失敗するため不採用。
+#
+# 確認: `head -c 3 <file>.ps1 | xxd -p` が `efbbbf` で始まることをチェック。
+#       新規追加・編集後は BOM の有無を確認すること。
+*.ps1 text eol=lf
+*.psm1 text eol=lf
+*.psd1 text eol=lf

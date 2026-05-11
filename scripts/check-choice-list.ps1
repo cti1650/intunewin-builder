@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   build-and-verify.yml の choice options と apps/*.yml の整合性を検証する。
 

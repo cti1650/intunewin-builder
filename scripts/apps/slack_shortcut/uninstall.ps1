@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $ShortcutPath = "$env:PUBLIC\Desktop\Slack.lnk"
 

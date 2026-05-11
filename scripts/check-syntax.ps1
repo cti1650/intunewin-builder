@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   PowerShell スクリプトの構文を AST パーサで検査する。
 
