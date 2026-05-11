@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $DesktopDir   = [Environment]::GetFolderPath('Desktop')
 $ShortcutPath = Join-Path $DesktopDir "ポータルサイト.lnk"

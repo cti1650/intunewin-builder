@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $AppxName     = "Microsoft.CompanyPortal"
 $AppId        = "Microsoft.CompanyPortal_8wekyb3d8bbwe!App"
