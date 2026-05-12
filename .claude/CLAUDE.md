@@ -29,7 +29,7 @@ GitHub Actions 上で Windows アプリのインストーラを取得し、Micro
 
 ## アプリ定義スキーマの主要ルール
 
-詳細は [README.md](../README.md) の「アプリ定義ファイル (YAML)」セクション参照。lint で機械的に検証されるルールは以下:
+詳細は [docs/yaml-schema.md](../docs/yaml-schema.md) 参照。lint で機械的に検証されるルールは以下:
 
 | フィールド | 許可される値 |
 |---|---|
