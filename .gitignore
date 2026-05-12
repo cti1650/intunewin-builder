@@ -1,6 +1,9 @@
 app/
 output/
+src/
+out/
 IntuneWinAppUtil.exe
+scripts/.tools/
 
 # Claude Code per-user settings
 .claude/settings.local.json

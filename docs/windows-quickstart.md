@@ -6,6 +6,31 @@
 
 このリポジトリの自動化 (lint / build-and-verify) を使わず **ローカル端末で 1 回だけ手作業で .intunewin を作る** ケース向け (例: 公開リポジトリに載せられない社内アプリ・テナント固有アプリの一発変換)。
 
+## TL;DR: 同梱ヘルパで 1 コマンド
+
+このリポジトリをクローンしているなら、[scripts/pack-local.ps1](../scripts/pack-local.ps1) が「IntuneWinAppUtil.exe の取得・キャッシュ + パック」を一発で済ませる。`src/` にインストーラを置いて実行するだけ:
+
+```powershell
+# 1. src にインストーラを置く (例)
+mkdir src, out
+Copy-Item C:\Downloads\setup.msi .\src\
+
+# 2. パック (初回のみ IntuneWinAppUtil.exe を scripts\.tools\ にキャッシュ)
+powershell.exe -ExecutionPolicy Bypass -File scripts\pack-local.ps1
+# → .\out\setup.intunewin が生成される
+```
+
+`src/` 直下の `.msi` / `.exe` / `.msix` を 1 件に絞れれば自動でエントリポイントになる。複数ある場合や別パスを使いたい場合は引数で指定:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File scripts\pack-local.ps1 `
+  -Src C:\work\app -Out C:\work\out -Setup installer.exe
+```
+
+> `src/` / `out/` / `scripts/.tools/` は `.gitignore` 済み。
+>
+> リポジトリをクローンしていない or `pack-local.ps1` を使わない場合は以下の手作業手順を参照する。
+
 ## 1. IntuneWinAppUtil.exe を取得
 
 [microsoft/Microsoft-Win32-Content-Prep-Tool](https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool) から `.exe` を直接落とす。Microsoft 公式の安定 URL は [`go.microsoft.com/fwlink/?linkid=2065730`](https://go.microsoft.com/fwlink/?linkid=2065730) で、リポジトリへリダイレクトされる。バイナリ単発で取りたい場合:
