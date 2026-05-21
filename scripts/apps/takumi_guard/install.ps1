@@ -1,5 +1,17 @@
 ﻿$ErrorActionPreference = "Stop"
 
+# Windows PowerShell 5.1 の Set-Content -Encoding UTF8 は BOM 付きで書き出すため、
+# pip の configparser が BOM を [global] セクション名に含めてしまい設定が効かなくなる。
+# .npmrc / YAML / TOML も BOM 無しで書くべきなので、全書き込みをこの関数経由に統一する。
+function Write-ConfigFile {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string[]]$Lines
+    )
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllLines($Path, $Lines, $utf8NoBom)
+}
+
 # ============================================================
 # Takumi Guard 一括配布 (registry 切替 + 3 日遅延)
 # ------------------------------------------------------------
@@ -62,23 +74,23 @@ function Write-PnpmConfigYaml {
     }
     $file = Join-Path $dir "config.yaml"
     # registry はファイルレベルでは .npmrc が優先されるが、明示しておく
-    @(
+    Write-ConfigFile -Path $file -Lines @(
         "# Managed by Takumi Guard (intunewin-builder). DO NOT EDIT MANUALLY."
         "registry: $NpmRegistry"
         "minimum-release-age: $PnpmMinReleaseAgeMin"
-    ) | Set-Content -LiteralPath $file -Encoding UTF8 -Force
+    )
     Write-Host "  pnpm config -> $file"
 }
 
 function Write-BunfigToml {
     param([string]$ProfilePath)
     $file = Join-Path $ProfilePath ".bunfig.toml"
-    @(
+    Write-ConfigFile -Path $file -Lines @(
         "# Managed by Takumi Guard (intunewin-builder). DO NOT EDIT MANUALLY."
         "[install]"
         "registry = `"$NpmRegistry`""
         "minimumReleaseAge = $BunMinReleaseAgeSec"
-    ) | Set-Content -LiteralPath $file -Encoding UTF8 -Force
+    )
     Write-Host "  bun config  -> $file"
 }
 
@@ -90,11 +102,11 @@ try {
     }
 
     # ----- system-wide .npmrc (npm / yarn classic / bun が registry, pnpm が registry を読む) -----
-    @(
+    Write-ConfigFile -Path $NpmConfigFile -Lines @(
         "# Managed by Takumi Guard (intunewin-builder). DO NOT EDIT MANUALLY."
         "registry=$NpmRegistry"
         "min-release-age=$NpmMinReleaseAgeDays"
-    ) | Set-Content -LiteralPath $NpmConfigFile -Encoding UTF8 -Force
+    )
     Write-Host "Wrote $NpmConfigFile"
 
     [System.Environment]::SetEnvironmentVariable(
@@ -120,11 +132,13 @@ try {
     }
 
     # ----- pip / uv / poetry -----
-    @(
+    # pip.ini は BOM があると Python の configparser が [global] セクション名に BOM を
+    # 含めてしまい設定が効かない。Write-ConfigFile は BOM 無しで書き出す。
+    Write-ConfigFile -Path $PipConfigFile -Lines @(
         "# Managed by Takumi Guard (intunewin-builder). DO NOT EDIT MANUALLY."
         "[global]"
         "index-url = $PipIndexUrl"
-    ) | Set-Content -LiteralPath $PipConfigFile -Encoding UTF8 -Force
+    )
     Write-Host "Wrote $PipConfigFile"
 
     [System.Environment]::SetEnvironmentVariable(
