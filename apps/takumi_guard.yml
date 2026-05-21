@@ -1,0 +1,41 @@
+# NOTE: Takumi Guard (GMO Flatt Security) は npm/pip 用のパッケージレジストリプロキシで、
+#       Windows インストーラは存在しない。配布の実態は以下:
+#         - npm/pnpm/yarn/bun: registry を https://npm.flatt.tech/ に切替 + min-release-age=3d
+#         - pip/uv/poetry    : index-url を https://pypi.flatt.tech/simple/ に切替
+#                             (3 日 quarantine はサーバー側で自動適用)
+#       本定義は configuration-only (custom_script: true)。
+#       Refs:
+#         - https://shisho.dev/docs/ja/t/guard/
+#         - https://shisho.dev/docs/r/202603-takumi-guard-pypi-quarantine/
+#         - https://flatt.tech/takumi/features/guard
+name: takumi_guard
+
+script_based: true
+custom_script: true
+
+installer:
+  type: script
+  script: install.ps1
+
+uninstall:
+  type: script
+  script: uninstall.ps1
+
+# C:\ProgramData\TakumiGuard\.installed をマーカーに使う。
+# 実 .npmrc / pip.ini の差し替え有無は内容比較が必要なので、
+# Intune の file-existence 検出ではマーカーで判定する。
+detect:
+  file: "C:\\ProgramData\\TakumiGuard\\.installed"
+
+# ==========
+# Intune Win32アプリ設定値（参照用）
+# ==========
+intune:
+  # C:\ProgramData 配下と Machine スコープ環境変数を書くため system
+  install_behavior: system
+  install_command: "powershell.exe -ExecutionPolicy Bypass -File install.ps1"
+  uninstall_command: "powershell.exe -ExecutionPolicy Bypass -File uninstall.ps1"
+  detection:
+    type: file
+    path: "C:\\ProgramData\\TakumiGuard"
+    file: ".installed"
