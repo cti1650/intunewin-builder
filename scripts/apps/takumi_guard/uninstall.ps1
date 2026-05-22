@@ -98,6 +98,8 @@ function Restore-Config {
 # ============================================================
 # Main
 # ============================================================
+# Pester から dot-source されたときは helper だけ露出させ main を実行しない。
+if ($MyInvocation.InvocationName -eq '.') { return }
 
 # system-wide
 Restore-Config -Path $NpmConfigFile
