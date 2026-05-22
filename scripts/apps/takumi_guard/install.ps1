@@ -247,11 +247,21 @@ try {
     foreach ($p in Get-TargetUserProfiles) {
         if (-not (Test-Path -LiteralPath $p)) { continue }
         try {
+            # pnpm は registry/auth を INI (.npmrc 互換) から、それ以外を YAML
+            # (pnpm-workspace.yaml or config.yaml) から読む二分体制。公式
+            # takumi-guard-setup-0.4.0.ps1 と同じく registry は rc (INI) に書く。
+            Apply-ManagedConfig `
+                -Path (Join-Path $p "AppData\Local\pnpm\config\rc") `
+                -Section "" `
+                -Settings ([ordered]@{
+                    "registry" = $NpmRegistry
+                }) -Separator "="
+
+            # minimumReleaseAge は config.yaml (YAML) の方に置く
             Apply-ManagedConfig `
                 -Path (Join-Path $p "AppData\Local\pnpm\config\config.yaml") `
                 -Section "" `
                 -Settings ([ordered]@{
-                    "registry"            = $NpmRegistry
                     "minimum-release-age" = $PnpmMinReleaseAgeMin
                 }) -Separator ": "
 

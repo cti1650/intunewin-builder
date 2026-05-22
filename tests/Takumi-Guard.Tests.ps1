@@ -374,6 +374,69 @@ Describe "Apply-ManagedConfig + Restore-Config round-trip" {
 # キー形式 / セクション配置を満たしているかを確認する)
 # ---------------------------------------------------------------------------
 
+Describe "pnpm rc + config.yaml split" {
+    It "writes registry to rc (INI) without quotes" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "rc"
+            Apply-ManagedConfig -Path $path -Section "" `
+                -Settings ([ordered]@{ "registry" = "https://npm.flatt.tech/" }) `
+                -Separator "="
+            $content = Get-Content $path -Raw
+            $content | Should -Match 'registry=https://npm\.flatt\.tech/'
+            # YAML 形式の colon は使われていない
+            $content | Should -Not -Match 'registry:\s'
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+
+    It "writes minimum-release-age to config.yaml without quotes (YAML scalar)" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "config.yaml"
+            Apply-ManagedConfig -Path $path -Section "" `
+                -Settings ([ordered]@{ "minimum-release-age" = 4320 }) `
+                -Separator ": "
+            $content = Get-Content $path -Raw
+            $content | Should -Match 'minimum-release-age: 4320'
+            # registry は config.yaml には書かれていない (rc 側に分離した)
+            $content | Should -Not -Match 'registry:'
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+
+    It "preserves existing pnpm-workspace.yaml-style keys when applied to config.yaml" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "config.yaml"
+            @(
+                'auto-install-peers: true'
+                'minimum-release-age: 60'
+                'hooks:'
+                '  readPackage: ./hooks.js'
+            ) | Set-Content -LiteralPath $path
+
+            Apply-ManagedConfig -Path $path -Section "" `
+                -Settings ([ordered]@{ "minimum-release-age" = 4320 }) `
+                -Separator ": "
+
+            $content = Get-Content $path -Raw
+            # 元の minimum-release-age はコメントアウト
+            $content | Should -Match '# \[TakumiGuard-disabled\] minimum-release-age: 60'
+            # 我々の値が入っている
+            $content | Should -Match 'minimum-release-age: 4320'
+            # 他のキーは無傷
+            $content | Should -Match 'auto-install-peers: true'
+            $content | Should -Match 'hooks:'
+            $content | Should -Match '  readPackage: \./hooks\.js'
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+}
+
 Describe "bun .bunfig.toml" {
     It "writes registry as object { url = `"...`" } (matches official setup-0.4.0)" {
         $tmp = New-TempDir

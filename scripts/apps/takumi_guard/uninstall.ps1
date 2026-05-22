@@ -117,6 +117,7 @@ $ProfileRoots = @("C:\Users\Default") + (
         Select-Object -ExpandProperty FullName
 )
 foreach ($p in $ProfileRoots) {
+    Restore-Config -Path (Join-Path $p "AppData\Local\pnpm\config\rc")
     Restore-Config -Path (Join-Path $p "AppData\Local\pnpm\config\config.yaml")
     Restore-Config -Path (Join-Path $p ".bunfig.toml")
     Restore-Config -Path (Join-Path $p "AppData\Roaming\pip\pip.ini")
