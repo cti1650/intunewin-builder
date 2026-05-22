@@ -10,9 +10,13 @@
 # 入れる。ファイル top-level の BeforeAll はファイル内の全 Describe で共有される。
 
 BeforeAll {
-    $RepoRoot      = (Resolve-Path "$PSScriptRoot/..").Path
-    $InstallScript = Join-Path $RepoRoot "scripts/apps/takumi_guard/install.ps1"
+    $RepoRoot        = (Resolve-Path "$PSScriptRoot/..").Path
+    $InstallScript   = Join-Path $RepoRoot "scripts/apps/takumi_guard/install.ps1"
+    $UninstallScript = Join-Path $RepoRoot "scripts/apps/takumi_guard/uninstall.ps1"
+    # install.ps1: Apply-ManagedConfig 等の helper
     . $InstallScript
+    # uninstall.ps1: Restore-Config (install.ps1 には無い)
+    . $UninstallScript
 
     function New-TempDir {
         $d = Join-Path ([System.IO.Path]::GetTempPath()) ("tg-test-" + [Guid]::NewGuid().ToString("N"))
