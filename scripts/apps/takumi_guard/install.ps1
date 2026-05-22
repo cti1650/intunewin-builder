@@ -259,7 +259,10 @@ try {
                 -Path (Join-Path $p ".bunfig.toml") `
                 -Section "install" `
                 -Settings ([ordered]@{
-                    "registry"          = "`"$NpmRegistry`""    # TOML string は要 quote
+                    # 公式 takumi-guard-setup-0.4.0.ps1 と同じ object 形式。
+                    # token なしの anonymous でも { url = "..." } で書く方が
+                    # 将来 token 追加するときに upgrade パスが素直になる。
+                    "registry"          = "{ url = `"$NpmRegistry`" }"
                     "minimumReleaseAge" = $BunMinReleaseAgeSec
                 }) -Separator " = "
         } catch {

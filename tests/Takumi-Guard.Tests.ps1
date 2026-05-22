@@ -368,3 +368,61 @@ Describe "Apply-ManagedConfig + Restore-Config round-trip" {
         }
     }
 }
+
+# ---------------------------------------------------------------------------
+# Per-PM integration scenarios (公式 takumi-guard-setup-0.4.0.ps1 と同じ
+# キー形式 / セクション配置を満たしているかを確認する)
+# ---------------------------------------------------------------------------
+
+Describe "bun .bunfig.toml" {
+    It "writes registry as object { url = `"...`" } (matches official setup-0.4.0)" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp ".bunfig.toml"
+            Apply-ManagedConfig -Path $path -Section "install" `
+                -Settings ([ordered]@{
+                    "registry"          = '{ url = "https://npm.flatt.tech/" }'
+                    "minimumReleaseAge" = 259200
+                }) -Separator " = "
+            $content = Get-Content $path -Raw
+            $content | Should -Match '\[install\]'
+            $content | Should -Match 'registry = \{ url = "https://npm\.flatt\.tech/" \}'
+            $content | Should -Match 'minimumReleaseAge = 259200'
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+
+    It "disables existing scalar registry when present (preserves other [install] keys)" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp ".bunfig.toml"
+            @(
+                '[install]'
+                'exact = true'
+                'registry = "https://corp.example/"'
+                ''
+                '[install.cache]'
+                'dir = "/tmp/bun"'
+            ) | Set-Content -LiteralPath $path
+
+            Apply-ManagedConfig -Path $path -Section "install" `
+                -Settings ([ordered]@{
+                    "registry"          = '{ url = "https://npm.flatt.tech/" }'
+                    "minimumReleaseAge" = 259200
+                }) -Separator " = "
+
+            $content = Get-Content $path -Raw
+            # ours present
+            $content | Should -Match 'registry = \{ url = "https://npm\.flatt\.tech/" \}'
+            # corp scalar registry commented out
+            $content | Should -Match '# \[TakumiGuard-disabled\] registry = "https://corp\.example/"'
+            # other keys preserved
+            $content | Should -Match 'exact = true'
+            $content | Should -Match '\[install\.cache\]'
+            $content | Should -Match 'dir = "/tmp/bun"'
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+}
