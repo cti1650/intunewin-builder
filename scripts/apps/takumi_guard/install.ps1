@@ -1,17 +1,5 @@
 ﻿$ErrorActionPreference = "Stop"
 
-# Windows PowerShell 5.1 の Set-Content -Encoding UTF8 は BOM 付きで書き出すため、
-# pip の configparser が BOM を [global] セクション名に含めてしまい設定が効かなくなる。
-# .npmrc / YAML / TOML も BOM 無しで書くべきなので、全書き込みをこの関数経由に統一する。
-function Write-ConfigFile {
-    param(
-        [Parameter(Mandatory)][string]$Path,
-        [Parameter(Mandatory)][string[]]$Lines
-    )
-    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
-    [System.IO.File]::WriteAllLines($Path, $Lines, $utf8NoBom)
-}
-
 # ============================================================
 # Takumi Guard 一括配布 (registry 切替 + 3 日遅延)
 # ------------------------------------------------------------
@@ -34,31 +22,171 @@ function Write-ConfigFile {
 #     Ref: https://bun.sh/docs/runtime/bunfig
 #
 #   yarn (classic & berry): release-age 相当の機能が無い。registry 切替のみ。
+#
+# 既存ファイルの取り扱い:
+#   - 既存の競合キーは "# [TakumiGuard-disabled] " prefix で無効化 (削除はしない)
+#   - 自分の追記は "# === BEGIN/END TakumiGuard ===" ブロックで囲む
+#   - uninstall.ps1 でブロック削除 + disabled prefix 剥がしで元に戻せる
 # ============================================================
 
 $NpmRegistry = "https://npm.flatt.tech/"
 $PipIndexUrl = "https://pypi.flatt.tech/simple/"
 
-$NpmMinReleaseAgeDays    = 3        # npm v11+: 整数日数
-$PnpmMinReleaseAgeMin    = 4320     # pnpm v10+: 分単位 (3d)
-$BunMinReleaseAgeSec     = 259200   # bun:       秒単位 (3d)
+$NpmMinReleaseAgeDays = 3        # npm v11+: 整数日数
+$PnpmMinReleaseAgeMin = 4320     # pnpm v10+: 分単位 (3d)
+$BunMinReleaseAgeSec  = 259200   # bun:       秒単位 (3d)
 
 $MarkerDir     = "C:\ProgramData\TakumiGuard"
 $MarkerFile    = Join-Path $MarkerDir ".installed"
-
-# system-wide .npmrc — npm / yarn classic が registry を読む。
-# pnpm は registry/auth のみ .npmrc から読む。bun も .npmrc から registry を読む。
 $NpmConfigDir  = "C:\ProgramData\npm-config"
 $NpmConfigFile = Join-Path $NpmConfigDir ".npmrc"
-
-# pip system-wide config
 $PipConfigDir  = "C:\ProgramData\pip"
 $PipConfigFile = Join-Path $PipConfigDir "pip.ini"
 
-# pnpm / bun は per-user config しか持たないので、Default User と
-# 既存ユーザー全員のプロファイルに書き込む。
+# ============================================================
+# Helper functions (uninstall.ps1 と共通; .intunewin に同梱できる .ps1 は
+# install.ps1 / uninstall.ps1 のみのためインライン重複)
+# ============================================================
+
+$MARKER_DISABLED = "# [TakumiGuard-disabled] "
+$BLOCK_BEGIN     = "# === BEGIN TakumiGuard ==="
+$BLOCK_END       = "# === END TakumiGuard ==="
+
+function Write-FileNoBom {
+    param([Parameter(Mandatory)][string]$Path, [string[]]$Lines)
+    $enc = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllLines($Path, $Lines, $enc)
+}
+
+function Read-LinesOrEmpty {
+    param([string]$Path)
+    if (Test-Path -LiteralPath $Path) {
+        return @(Get-Content -LiteralPath $Path)
+    }
+    return @()
+}
+
+# 既存の BEGIN/END ブロック (および中身) を完全に取り除く
+function Remove-ManagedBlock {
+    param([string[]]$Lines)
+    $out = New-Object System.Collections.Generic.List[string]
+    $inBlock = $false
+    foreach ($line in $Lines) {
+        $t = $line.TrimEnd()
+        if (-not $inBlock -and $t -eq $BLOCK_BEGIN) { $inBlock = $true; continue }
+        if ($inBlock -and $t -eq $BLOCK_END) { $inBlock = $false; continue }
+        if (-not $inBlock) { $out.Add($line) }
+    }
+    return ,@($out.ToArray())
+}
+
+# "# [TakumiGuard-disabled] foo=bar" → "foo=bar" に戻す
+function Restore-DisabledLines {
+    param([string[]]$Lines)
+    return ,@($Lines | ForEach-Object {
+        if ($_.StartsWith($MARKER_DISABLED)) {
+            $_.Substring($MARKER_DISABLED.Length)
+        } else {
+            $_
+        }
+    })
+}
+
+# 指定セクション (空文字なら top-level) 内で、Keys に一致する行を disabled prefix 付き
+# のコメントに置換する。
+function Disable-MatchingKeys {
+    param(
+        [string[]]$Lines,
+        [string]$Section,
+        [string[]]$Keys,
+        [string]$Separator     # "=" or ":"
+    )
+    $keyAlt = ($Keys | ForEach-Object { [regex]::Escape($_) }) -join "|"
+    $sepEsc = [regex]::Escape($Separator)
+    # top-level 指定 (Section が "") のときは先頭にインデント許可しない (YAML のネストキーを誤検出しないため)
+    $lead = if ($Section) { "\s*" } else { "" }
+    $keyPattern = "^${lead}($keyAlt)\s*$sepEsc"
+
+    $inSection = ($Section -eq "")
+    $headerStr = if ($Section) { "[$Section]" } else { "" }
+
+    $out = New-Object System.Collections.Generic.List[string]
+    foreach ($line in $Lines) {
+        $t = $line.Trim()
+        if ($Section -and $t -match '^\[[^\]]+\]$') {
+            $inSection = ($t -eq $headerStr)
+            $out.Add($line)
+            continue
+        }
+        if ($inSection -and $line -match $keyPattern) {
+            $out.Add($MARKER_DISABLED + $line)
+        } else {
+            $out.Add($line)
+        }
+    }
+    return ,@($out.ToArray())
+}
+
+# 管理ブロックを末尾 (または該当セクションの直下) に挿入。
+function Add-ManagedBlock {
+    param(
+        [string[]]$Lines,
+        [string]$Section,
+        [System.Collections.Specialized.OrderedDictionary]$Settings,
+        [string]$Separator     # "=" or " = " or ": "
+    )
+    $inner = New-Object System.Collections.Generic.List[string]
+    $inner.Add($BLOCK_BEGIN)
+    foreach ($k in $Settings.Keys) {
+        $inner.Add("$k$Separator$($Settings[$k])")
+    }
+    $inner.Add($BLOCK_END)
+
+    if (-not $Section) {
+        return ,@(@($Lines) + @($inner.ToArray()))
+    }
+
+    # 既存のセクションヘッダ直下に挿入。なければ末尾にセクションごと追加。
+    $sectionHeader = "[$Section]"
+    $idx = -1
+    for ($i = 0; $i -lt $Lines.Count; $i++) {
+        if ($Lines[$i].Trim() -eq $sectionHeader) { $idx = $i; break }
+    }
+    if ($idx -ge 0) {
+        $head = $Lines[0..$idx]
+        $tail = if ($idx + 1 -lt $Lines.Count) { $Lines[($idx + 1)..($Lines.Count - 1)] } else { @() }
+        return ,@(@($head) + @($inner.ToArray()) + @($tail))
+    }
+    $appended = @($Lines)
+    if ($appended.Count -gt 0 -and $appended[-1].Trim() -ne "") { $appended += "" }
+    $appended += $sectionHeader
+    $appended += @($inner.ToArray())
+    return ,@($appended)
+}
+
+function Apply-ManagedConfig {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [string]$Section,
+        [Parameter(Mandatory)][System.Collections.Specialized.OrderedDictionary]$Settings,
+        [Parameter(Mandatory)][string]$Separator
+    )
+    $dir = Split-Path -Parent $Path
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -Path $dir -ItemType Directory -Force | Out-Null
+    }
+    $lines = Read-LinesOrEmpty $Path
+    $lines = Remove-ManagedBlock -Lines $lines
+    $lines = Restore-DisabledLines -Lines $lines
+    $lines = Disable-MatchingKeys -Lines $lines -Section $Section `
+        -Keys @($Settings.Keys) -Separator $Separator.Trim()
+    $lines = Add-ManagedBlock -Lines $lines -Section $Section `
+        -Settings $Settings -Separator $Separator
+    Write-FileNoBom -Path $Path -Lines $lines
+    Write-Host "  $Path"
+}
+
 function Get-TargetUserProfiles {
-    # C:\Users\Default は新規ログオン時にユーザーへ複製される雛形
     $defaults = @("C:\Users\Default")
     $existing = Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue |
         Where-Object { $_.Name -notin @("Default","Public","Default User","All Users","WDAGUtilityAccount") } |
@@ -66,33 +194,9 @@ function Get-TargetUserProfiles {
     return @($defaults + $existing)
 }
 
-function Write-PnpmConfigYaml {
-    param([string]$ProfilePath)
-    $dir = Join-Path $ProfilePath "AppData\Local\pnpm\config"
-    if (-not (Test-Path -LiteralPath $dir)) {
-        New-Item -Path $dir -ItemType Directory -Force | Out-Null
-    }
-    $file = Join-Path $dir "config.yaml"
-    # registry はファイルレベルでは .npmrc が優先されるが、明示しておく
-    Write-ConfigFile -Path $file -Lines @(
-        "# Managed by Takumi Guard (intunewin-builder). DO NOT EDIT MANUALLY."
-        "registry: $NpmRegistry"
-        "minimum-release-age: $PnpmMinReleaseAgeMin"
-    )
-    Write-Host "  pnpm config -> $file"
-}
-
-function Write-BunfigToml {
-    param([string]$ProfilePath)
-    $file = Join-Path $ProfilePath ".bunfig.toml"
-    Write-ConfigFile -Path $file -Lines @(
-        "# Managed by Takumi Guard (intunewin-builder). DO NOT EDIT MANUALLY."
-        "[install]"
-        "registry = `"$NpmRegistry`""
-        "minimumReleaseAge = $BunMinReleaseAgeSec"
-    )
-    Write-Host "  bun config  -> $file"
-}
+# ============================================================
+# Main
+# ============================================================
 
 try {
     foreach ($d in @($MarkerDir, $NpmConfigDir, $PipConfigDir)) {
@@ -101,13 +205,13 @@ try {
         }
     }
 
-    # ----- system-wide .npmrc (npm / yarn classic / bun が registry, pnpm が registry を読む) -----
-    Write-ConfigFile -Path $NpmConfigFile -Lines @(
-        "# Managed by Takumi Guard (intunewin-builder). DO NOT EDIT MANUALLY."
-        "registry=$NpmRegistry"
-        "min-release-age=$NpmMinReleaseAgeDays"
-    )
-    Write-Host "Wrote $NpmConfigFile"
+    # ----- system-wide .npmrc (no section, '=' separator) -----
+    Write-Host "Applying .npmrc:"
+    Apply-ManagedConfig -Path $NpmConfigFile -Section "" `
+        -Settings ([ordered]@{
+            "registry"        = $NpmRegistry
+            "min-release-age" = $NpmMinReleaseAgeDays
+        }) -Separator "="
 
     [System.Environment]::SetEnvironmentVariable(
         "NPM_CONFIG_GLOBALCONFIG", $NpmConfigFile, "Machine")
@@ -119,27 +223,36 @@ try {
     Write-Host "Set system env YARN_NPM_REGISTRY_SERVER=$NpmRegistry"
 
     # ----- pnpm / bun: per-user config を Default + 既存全ユーザーに配布 -----
-    Write-Host "Distributing pnpm/bun per-user configs:"
+    Write-Host "Applying pnpm/bun per-user configs:"
     foreach ($p in Get-TargetUserProfiles) {
-        if (Test-Path -LiteralPath $p) {
-            try {
-                Write-PnpmConfigYaml -ProfilePath $p
-                Write-BunfigToml     -ProfilePath $p
-            } catch {
-                Write-Warning "  Skipped $p : $_"
-            }
+        if (-not (Test-Path -LiteralPath $p)) { continue }
+        try {
+            Apply-ManagedConfig `
+                -Path (Join-Path $p "AppData\Local\pnpm\config\config.yaml") `
+                -Section "" `
+                -Settings ([ordered]@{
+                    "registry"            = $NpmRegistry
+                    "minimum-release-age" = $PnpmMinReleaseAgeMin
+                }) -Separator ": "
+
+            Apply-ManagedConfig `
+                -Path (Join-Path $p ".bunfig.toml") `
+                -Section "install" `
+                -Settings ([ordered]@{
+                    "registry"          = "`"$NpmRegistry`""    # TOML string は要 quote
+                    "minimumReleaseAge" = $BunMinReleaseAgeSec
+                }) -Separator " = "
+        } catch {
+            Write-Warning "  Skipped $p : $_"
         }
     }
 
     # ----- pip / uv / poetry -----
-    # pip.ini は BOM があると Python の configparser が [global] セクション名に BOM を
-    # 含めてしまい設定が効かない。Write-ConfigFile は BOM 無しで書き出す。
-    Write-ConfigFile -Path $PipConfigFile -Lines @(
-        "# Managed by Takumi Guard (intunewin-builder). DO NOT EDIT MANUALLY."
-        "[global]"
-        "index-url = $PipIndexUrl"
-    )
-    Write-Host "Wrote $PipConfigFile"
+    Write-Host "Applying pip.ini:"
+    Apply-ManagedConfig -Path $PipConfigFile -Section "global" `
+        -Settings ([ordered]@{
+            "index-url" = $PipIndexUrl
+        }) -Separator " = "
 
     [System.Environment]::SetEnvironmentVariable(
         "PIP_INDEX_URL", $PipIndexUrl, "Machine")
@@ -147,9 +260,8 @@ try {
         "UV_INDEX_URL", $PipIndexUrl, "Machine")
     Write-Host "Set system env PIP_INDEX_URL / UV_INDEX_URL=$PipIndexUrl"
 
-    # ----- marker -----
-    Set-Content -LiteralPath $MarkerFile `
-        -Value (Get-Date -Format "o") -Encoding UTF8 -Force
+    # ----- marker (Intune 検出ルール用; 中身は読まれないので BOM 不問) -----
+    Set-Content -LiteralPath $MarkerFile -Value (Get-Date -Format "o") -Force
     Write-Host "Wrote marker $MarkerFile"
 
     Write-Output "Takumi Guard applied. Quarantine: pip/uv/poetry=server-side 3d, npm/pnpm/bun=client-side 3d, yarn=registry-only (no release-age support)."
