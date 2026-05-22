@@ -5,17 +5,20 @@
 # and end-to-end Apply-ManagedConfig / Restore-Config behavior against
 # arbitrary temp paths. Compatible with Pester v5+.
 
-# Pester v5: helper のスコープを伝播させるため、dot-source と helper 定義は
-# Describe より外側 (Discovery 相当のスコープ) に置く。BeforeAll の中に
-# 入れると It ブロックから関数が見えなくなる。
-$script:RepoRoot      = (Resolve-Path "$PSScriptRoot/..").Path
-$script:InstallScript = Join-Path $script:RepoRoot "scripts/apps/takumi_guard/install.ps1"
-. $script:InstallScript
+# Pester v5: top-level コードは Discovery phase で評価され It block scope に
+# 関数定義を届けない。helper の dot-source と New-TempDir は **BeforeAll** に
+# 入れる。ファイル top-level の BeforeAll はファイル内の全 Describe で共有される。
 
-function New-TempDir {
-    $d = Join-Path ([System.IO.Path]::GetTempPath()) ("tg-test-" + [Guid]::NewGuid().ToString("N"))
-    New-Item -Path $d -ItemType Directory -Force | Out-Null
-    return $d
+BeforeAll {
+    $RepoRoot      = (Resolve-Path "$PSScriptRoot/..").Path
+    $InstallScript = Join-Path $RepoRoot "scripts/apps/takumi_guard/install.ps1"
+    . $InstallScript
+
+    function New-TempDir {
+        $d = Join-Path ([System.IO.Path]::GetTempPath()) ("tg-test-" + [Guid]::NewGuid().ToString("N"))
+        New-Item -Path $d -ItemType Directory -Force | Out-Null
+        return $d
+    }
 }
 
 # ---------------------------------------------------------------------------
