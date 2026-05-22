@@ -331,6 +331,16 @@ try {
             Apply-UvIndex `
                 -Path (Join-Path $p "AppData\Roaming\uv\uv.toml") `
                 -Url $PipIndexUrl
+
+            # poetry per-user: PIP_INDEX_URL は poetry が見ない。専用設定が必須。
+            # priority = "primary" で takumi をデフォルト source にする (poetry 1.5+)。
+            Apply-ManagedConfig `
+                -Path (Join-Path $p "AppData\Roaming\pypoetry\config.toml") `
+                -Section "repositories.takumi-guard" `
+                -Settings ([ordered]@{
+                    "url"      = "`"$PipIndexUrl`""    # TOML string は要 quote
+                    "priority" = '"primary"'
+                }) -Separator " = "
         } catch {
             Write-Warning "  Skipped $p : $_"
         }

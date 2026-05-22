@@ -437,6 +437,60 @@ Describe "pnpm rc + config.yaml split" {
     }
 }
 
+Describe "poetry config.toml" {
+    It "writes [repositories.takumi-guard] section with url and priority=primary" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "config.toml"
+            Apply-ManagedConfig -Path $path -Section "repositories.takumi-guard" `
+                -Settings ([ordered]@{
+                    "url"      = '"https://pypi.flatt.tech/simple/"'
+                    "priority" = '"primary"'
+                }) -Separator " = "
+            $content = Get-Content $path -Raw
+            $content | Should -Match '\[repositories\.takumi-guard\]'
+            $content | Should -Match 'url = "https://pypi\.flatt\.tech/simple/"'
+            $content | Should -Match 'priority = "primary"'
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+
+    It "preserves other [repositories.*] sections" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "config.toml"
+            @(
+                '[repositories.internal]'
+                'url = "https://corp.example/pypi/"'
+                ''
+                '[virtualenvs]'
+                'create = true'
+            ) | Set-Content -LiteralPath $path
+
+            Apply-ManagedConfig -Path $path -Section "repositories.takumi-guard" `
+                -Settings ([ordered]@{
+                    "url"      = '"https://pypi.flatt.tech/simple/"'
+                    "priority" = '"primary"'
+                }) -Separator " = "
+
+            $content = Get-Content $path -Raw
+            # ours added
+            $content | Should -Match '\[repositories\.takumi-guard\]'
+            $content | Should -Match 'url = "https://pypi\.flatt\.tech/simple/"'
+            # other sections preserved (NOT disabled because different section name)
+            $content | Should -Match '\[repositories\.internal\]'
+            $content | Should -Match 'url = "https://corp\.example/pypi/"'
+            $content | Should -Match '\[virtualenvs\]'
+            $content | Should -Match 'create = true'
+            # ↑ internal の url 行は disabled prefix 付いてないこと
+            $content | Should -Not -Match '# \[TakumiGuard-disabled\] url = "https://corp\.example/pypi/"'
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+}
+
 Describe "uv uv.toml (Apply-UvIndex)" {
     It "creates [[index]] array-of-tables entry with default = true (new file)" {
         $tmp = New-TempDir
