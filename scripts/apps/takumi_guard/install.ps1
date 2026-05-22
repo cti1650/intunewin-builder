@@ -21,7 +21,11 @@
 #     system-wide パスは無く ~/.bunfig.toml のみ。
 #     Ref: https://bun.sh/docs/runtime/bunfig
 #
-#   yarn (classic & berry): release-age 相当の機能が無い。registry 切替のみ。
+#   yarn berry 4.10+: npmMinimalAgeGate ("3d" 形式の文字列, 2025-09 追加)。
+#     .yarnrc.yml の global パスは per-user (~/.yarnrc.yml) しか無いので、
+#     Machine env YARN_NPM_MINIMAL_AGE_GATE で全ユーザーに強制する。
+#     Ref: https://yarnpkg.com/configuration/yarnrc#npmMinimalAgeGate
+#   yarn classic (1.x): release-age 機能なし。registry 切替のみ。
 #
 # 既存ファイルの取り扱い:
 #   - 既存の競合キーは "# [TakumiGuard-disabled] " prefix で無効化 (削除はしない)
@@ -217,10 +221,14 @@ try {
         "NPM_CONFIG_GLOBALCONFIG", $NpmConfigFile, "Machine")
     Write-Host "Set system env NPM_CONFIG_GLOBALCONFIG=$NpmConfigFile"
 
-    # ----- yarn berry (registry のみ; release-age 機能無し) -----
+    # ----- yarn berry (registry + npmMinimalAgeGate; yarn 4.10+ で release-age 対応) -----
     [System.Environment]::SetEnvironmentVariable(
         "YARN_NPM_REGISTRY_SERVER", $NpmRegistry, "Machine")
     Write-Host "Set system env YARN_NPM_REGISTRY_SERVER=$NpmRegistry"
+    # yarn の npmMinimalAgeGate は "3d" のような duration 文字列を受ける
+    [System.Environment]::SetEnvironmentVariable(
+        "YARN_NPM_MINIMAL_AGE_GATE", "3d", "Machine")
+    Write-Host "Set system env YARN_NPM_MINIMAL_AGE_GATE=3d"
 
     # ----- pnpm / bun: per-user config を Default + 既存全ユーザーに配布 -----
     Write-Host "Applying pnpm/bun per-user configs:"
@@ -264,7 +272,7 @@ try {
     Set-Content -LiteralPath $MarkerFile -Value (Get-Date -Format "o") -Force
     Write-Host "Wrote marker $MarkerFile"
 
-    Write-Output "Takumi Guard applied. Quarantine: pip/uv/poetry=server-side 3d, npm/pnpm/bun=client-side 3d, yarn=registry-only (no release-age support)."
+    Write-Output "Takumi Guard applied. Quarantine: pip/uv/poetry=server-side 3d, npm/pnpm/bun/yarn(4.10+)=client-side 3d, yarn-classic=registry-only."
     exit 0
 }
 catch {

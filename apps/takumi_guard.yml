@@ -1,12 +1,15 @@
 # NOTE: Takumi Guard (GMO Flatt Security) は npm/pip 用のパッケージレジストリプロキシで、
 #       Windows インストーラは存在しない。配布の実態は以下:
-#         - npm/pnpm/yarn/bun: registry を https://npm.flatt.tech/ に切替 + min-release-age=3d
-#         - pip/uv/poetry    : index-url を https://pypi.flatt.tech/simple/ に切替
-#                             (3 日 quarantine はサーバー側で自動適用)
+#         - npm / pnpm / yarn berry 4.10+ / bun: registry を https://npm.flatt.tech/ に切替
+#                                                + 3 日 release-age をクライアント側で強制
+#         - yarn classic (1.x)                 : registry 切替のみ (release-age 機能なし)
+#         - pip / uv / poetry                  : index-url を https://pypi.flatt.tech/simple/ に切替
+#                                                (3 日 quarantine はサーバー側で自動適用)
 #       本定義は configuration-only (custom_script: true)。
 #       Refs:
 #         - https://shisho.dev/docs/ja/t/guard/
 #         - https://shisho.dev/docs/r/202603-takumi-guard-pypi-quarantine/
+#         - https://yarnpkg.com/configuration/yarnrc#npmMinimalAgeGate
 #         - https://flatt.tech/takumi/features/guard
 name: takumi_guard
 

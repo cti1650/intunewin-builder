@@ -115,7 +115,7 @@ foreach ($p in $ProfileRoots) {
 }
 
 # Machine 環境変数を解除
-foreach ($v in @("NPM_CONFIG_GLOBALCONFIG", "YARN_NPM_REGISTRY_SERVER", "PIP_INDEX_URL", "UV_INDEX_URL")) {
+foreach ($v in @("NPM_CONFIG_GLOBALCONFIG", "YARN_NPM_REGISTRY_SERVER", "YARN_NPM_MINIMAL_AGE_GATE", "PIP_INDEX_URL", "UV_INDEX_URL")) {
     [System.Environment]::SetEnvironmentVariable($v, $null, "Machine")
     Write-Output "Cleared system env $v"
 }
