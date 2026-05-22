@@ -123,6 +123,7 @@ foreach ($p in $ProfileRoots) {
     Restore-Config -Path (Join-Path $p "AppData\Roaming\pip\pip.ini")
     Restore-Config -Path (Join-Path $p "AppData\Roaming\uv\uv.toml")
     Restore-Config -Path (Join-Path $p "AppData\Roaming\pypoetry\config.toml")
+    Restore-Config -Path (Join-Path $p ".bundle\config")
 }
 
 # Machine 環境変数を解除

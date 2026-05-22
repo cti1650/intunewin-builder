@@ -341,6 +341,17 @@ try {
                     "url"      = "`"$PipIndexUrl`""    # TOML string は要 quote
                     "priority" = '"primary"'
                 }) -Separator " = "
+
+            # Bundler (Ruby) per-user: ~/.bundle/config に
+            # BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/: "https://rubygems.flatt.tech/"
+            # を書く。Bundler の mirror 機能で rubygems.org への通信を Takumi 経由に。
+            # Bundler 1.13+ で対応。anonymous 利用なので token credential は書かない。
+            Apply-ManagedConfig `
+                -Path (Join-Path $p ".bundle\config") `
+                -Section "" `
+                -Settings ([ordered]@{
+                    "BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/" = '"https://rubygems.flatt.tech/"'
+                }) -Separator ": "
         } catch {
             Write-Warning "  Skipped $p : $_"
         }

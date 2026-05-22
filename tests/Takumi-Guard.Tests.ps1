@@ -437,6 +437,72 @@ Describe "pnpm rc + config.yaml split" {
     }
 }
 
+Describe "Bundler ~/.bundle/config" {
+    It "writes BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/ key with quoted URL" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "config"
+            Apply-ManagedConfig -Path $path -Section "" `
+                -Settings ([ordered]@{
+                    "BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/" = '"https://rubygems.flatt.tech/"'
+                }) -Separator ": "
+            $content = Get-Content $path -Raw
+            $content | Should -Match 'BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/: "https://rubygems\.flatt\.tech/"'
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+
+    It "preserves other BUNDLE_* keys" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "config"
+            @(
+                '---'
+                'BUNDLE_JOBS: "4"'
+                'BUNDLE_PATH: "vendor/bundle"'
+            ) | Set-Content -LiteralPath $path
+
+            Apply-ManagedConfig -Path $path -Section "" `
+                -Settings ([ordered]@{
+                    "BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/" = '"https://rubygems.flatt.tech/"'
+                }) -Separator ": "
+
+            $content = Get-Content $path -Raw
+            # ours added
+            $content | Should -Match 'BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/: "https://rubygems\.flatt\.tech/"'
+            # other BUNDLE_* keys preserved (not in disable list)
+            $content | Should -Match 'BUNDLE_JOBS: "4"'
+            $content | Should -Match 'BUNDLE_PATH: "vendor/bundle"'
+            # YAML doc marker preserved
+            $content | Should -Match '^---'
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+
+    It "disables existing BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/ key when re-applied with different value" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "config"
+            @(
+                'BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/: "https://corp.example/gems/"'
+            ) | Set-Content -LiteralPath $path
+
+            Apply-ManagedConfig -Path $path -Section "" `
+                -Settings ([ordered]@{
+                    "BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/" = '"https://rubygems.flatt.tech/"'
+                }) -Separator ": "
+
+            $content = Get-Content $path -Raw
+            $content | Should -Match '# \[TakumiGuard-disabled\] BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/: "https://corp\.example/gems/"'
+            $content | Should -Match 'BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/: "https://rubygems\.flatt\.tech/"'
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+}
+
 Describe "poetry config.toml" {
     It "writes [repositories.takumi-guard] section with url and priority=primary" {
         $tmp = New-TempDir
