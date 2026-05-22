@@ -201,6 +201,11 @@ function Get-TargetUserProfiles {
 # ============================================================
 # Main
 # ============================================================
+# Pester から `. ./install.ps1` で dot-source されたときは helper だけ
+# 露出させ main を実行しないようにする。
+# Intune 実行 (powershell.exe -File install.ps1) では InvocationName は
+# script のパスになるので main が走る。
+if ($MyInvocation.InvocationName -eq '.') { return }
 
 try {
     foreach ($d in @($MarkerDir, $NpmConfigDir, $PipConfigDir)) {

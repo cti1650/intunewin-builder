@@ -1,0 +1,51 @@
+name: test-takumi-guard
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'scripts/apps/takumi_guard/**'
+      - 'tests/Takumi-Guard.Tests.ps1'
+      - '.github/workflows/test-takumi-guard.yml'
+  pull_request:
+    paths:
+      - 'scripts/apps/takumi_guard/**'
+      - 'tests/Takumi-Guard.Tests.ps1'
+      - '.github/workflows/test-takumi-guard.yml'
+
+concurrency:
+  group: test-takumi-guard-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pester:
+    name: Pester
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Pester
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -Force -Scope CurrentUser -MinimumVersion 5.5.0
+
+      - name: Run tests
+        shell: pwsh
+        run: |
+          $config = New-PesterConfiguration
+          $config.Run.Path = 'tests/Takumi-Guard.Tests.ps1'
+          $config.Output.Verbosity = 'Detailed'
+          $config.Run.Exit = $true
+          $config.TestResult.Enabled = $true
+          $config.TestResult.OutputPath = 'pester-results.xml'
+          Invoke-Pester -Configuration $config
+
+      - name: Upload test result
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: pester-results
+          path: pester-results.xml
+          if-no-files-found: warn
