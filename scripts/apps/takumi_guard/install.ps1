@@ -265,6 +265,16 @@ try {
                     "registry"          = "{ url = `"$NpmRegistry`" }"
                     "minimumReleaseAge" = $BunMinReleaseAgeSec
                 }) -Separator " = "
+
+            # pip per-user: pip の優先順位は site > user > global なので
+            # system-wide pip.ini だけだと user に何か書かれていると負ける。
+            # 各ユーザーの %APPDATA%\pip\pip.ini にも管理ブロックを置く。
+            Apply-ManagedConfig `
+                -Path (Join-Path $p "AppData\Roaming\pip\pip.ini") `
+                -Section "global" `
+                -Settings ([ordered]@{
+                    "index-url" = $PipIndexUrl
+                }) -Separator " = "
         } catch {
             Write-Warning "  Skipped $p : $_"
         }
