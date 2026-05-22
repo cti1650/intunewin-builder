@@ -121,6 +121,7 @@ foreach ($p in $ProfileRoots) {
     Restore-Config -Path (Join-Path $p "AppData\Local\pnpm\config\config.yaml")
     Restore-Config -Path (Join-Path $p ".bunfig.toml")
     Restore-Config -Path (Join-Path $p "AppData\Roaming\pip\pip.ini")
+    Restore-Config -Path (Join-Path $p "AppData\Roaming\uv\uv.toml")
 }
 
 # Machine 環境変数を解除

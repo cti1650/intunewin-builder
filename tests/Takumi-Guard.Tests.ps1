@@ -437,6 +437,82 @@ Describe "pnpm rc + config.yaml split" {
     }
 }
 
+Describe "uv uv.toml (Apply-UvIndex)" {
+    It "creates [[index]] array-of-tables entry with default = true (new file)" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "uv.toml"
+            Apply-UvIndex -Path $path -Url "https://pypi.flatt.tech/simple/"
+            $content = Get-Content $path -Raw
+            $content | Should -Match '\[\[index\]\]'
+            $content | Should -Match 'url = "https://pypi\.flatt\.tech/simple/"'
+            $content | Should -Match 'default = true'
+            $content | Should -Match '# === BEGIN TakumiGuard ==='
+            $content | Should -Match '# === END TakumiGuard ==='
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+
+    It "disables existing 'default = true' so ours wins" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "uv.toml"
+            @(
+                '[[index]]'
+                'url = "https://corp.example/simple/"'
+                'default = true'
+            ) | Set-Content -LiteralPath $path
+
+            Apply-UvIndex -Path $path -Url "https://pypi.flatt.tech/simple/"
+
+            $content = Get-Content $path -Raw
+            $content | Should -Match '# \[TakumiGuard-disabled\] default = true'
+            # url の corp 行は残る (default ではなくなった存在として)
+            $content | Should -Match 'url = "https://corp\.example/simple/"'
+            # ours added
+            $content | Should -Match 'url = "https://pypi\.flatt\.tech/simple/"'
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+
+    It "leaves existing 'default = false' untouched" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "uv.toml"
+            @(
+                '[[index]]'
+                'url = "https://mirror.example/"'
+                'default = false'
+            ) | Set-Content -LiteralPath $path
+
+            Apply-UvIndex -Path $path -Url "https://pypi.flatt.tech/simple/"
+
+            $content = Get-Content $path -Raw
+            # default = false は disabled prefix を付けない
+            $content | Should -Not -Match '# \[TakumiGuard-disabled\] default = false'
+            $content | Should -Match 'default = false'
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+
+    It "is idempotent (re-apply doesn't accumulate blocks)" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "uv.toml"
+            Apply-UvIndex -Path $path -Url "https://pypi.flatt.tech/simple/"
+            $first = Get-Content $path -Raw
+            Apply-UvIndex -Path $path -Url "https://pypi.flatt.tech/simple/"
+            $second = Get-Content $path -Raw
+            $first | Should -Be $second
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+}
+
 Describe "bun .bunfig.toml" {
     It "writes registry as object { url = `"...`" } (matches official setup-0.4.0)" {
         $tmp = New-TempDir

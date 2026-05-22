@@ -181,6 +181,46 @@ function Apply-ManagedConfig {
     Write-Host "  $Path"
 }
 
+# uv.toml 専用 (TOML array-of-tables [[index]] 構文。Apply-ManagedConfig の
+# 単一 [section] モデルでは扱えないため別 helper)。
+# 既存の `default = true` は disabled prefix でコメントアウトし、自分の
+# [[index]] エントリを default = true で末尾に追記する。
+function Apply-UvIndex {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Url
+    )
+    $dir = Split-Path -Parent $Path
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -Path $dir -ItemType Directory -Force | Out-Null
+    }
+    $lines = Read-LinesOrEmpty $Path
+    $lines = Remove-ManagedBlock -Lines $lines
+    $lines = Restore-DisabledLines -Lines $lines
+
+    # 既存の `default = true` をコメントアウト (`default = false` は触らない)
+    $out = New-Object System.Collections.Generic.List[string]
+    foreach ($line in $lines) {
+        if ($line -match '^\s*default\s*=\s*true\b') {
+            $out.Add($MARKER_DISABLED + $line)
+        } else {
+            $out.Add($line)
+        }
+    }
+    $appended = @($out.ToArray())
+
+    # 末尾に [[index]] ブロック (BEGIN/END で囲む)
+    if ($appended.Count -gt 0 -and $appended[-1].Trim() -ne "") { $appended += "" }
+    $appended += $BLOCK_BEGIN
+    $appended += "[[index]]"
+    $appended += "url = `"$Url`""
+    $appended += "default = true"
+    $appended += $BLOCK_END
+
+    Write-FileNoBom -Path $Path -Lines $appended
+    Write-Host "  $Path"
+}
+
 function Get-TargetUserProfiles {
     $defaults = @("C:\Users\Default")
     $existing = Get-ChildItem "C:\Users" -Directory -ErrorAction SilentlyContinue |
@@ -285,6 +325,12 @@ try {
                 -Settings ([ordered]@{
                     "index-url" = $PipIndexUrl
                 }) -Separator " = "
+
+            # uv per-user: env だけだと CLI flag / project の pyproject.toml の
+            # [tool.uv.sources] で容易に override される。file 配置で強度を上げる。
+            Apply-UvIndex `
+                -Path (Join-Path $p "AppData\Roaming\uv\uv.toml") `
+                -Url $PipIndexUrl
         } catch {
             Write-Warning "  Skipped $p : $_"
         }
