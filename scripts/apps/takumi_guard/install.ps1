@@ -33,28 +33,19 @@
 #   - uninstall.ps1 でブロック削除 + disabled prefix 剥がしで元に戻せる
 # ============================================================
 
-$NpmRegistry = "https://npm.flatt.tech/"
-$PipIndexUrl = "https://pypi.flatt.tech/simple/"
-
-$NpmMinReleaseAgeDays = 3        # npm v11+: 整数日数
-$PnpmMinReleaseAgeMin = 4320     # pnpm v10+: 分単位 (3d)
-$BunMinReleaseAgeSec  = 259200   # bun:       秒単位 (3d)
-
-$MarkerDir     = "C:\ProgramData\TakumiGuard"
-$MarkerFile    = Join-Path $MarkerDir ".installed"
-$NpmConfigDir  = "C:\ProgramData\npm-config"
-$NpmConfigFile = Join-Path $NpmConfigDir ".npmrc"
-$PipConfigDir  = "C:\ProgramData\pip"
-$PipConfigFile = Join-Path $PipConfigDir "pip.ini"
-
 # ============================================================
-# Helper functions (uninstall.ps1 と共通; .intunewin に同梱できる .ps1 は
-# install.ps1 / uninstall.ps1 のみのためインライン重複)
+# Helper-scope constants (referenced from helper functions; safe to load
+# on Linux pwsh for Pester testing — no Windows-specific paths here)
 # ============================================================
 
 $MARKER_DISABLED = "# [TakumiGuard-disabled] "
 $BLOCK_BEGIN     = "# === BEGIN TakumiGuard ==="
 $BLOCK_END       = "# === END TakumiGuard ==="
+
+# ============================================================
+# Helper functions (uninstall.ps1 と共通; .intunewin に同梱できる .ps1 は
+# install.ps1 / uninstall.ps1 のみのためインライン重複)
+# ============================================================
 
 function Write-FileNoBom {
     param([Parameter(Mandatory)][string]$Path, [string[]]$Lines)
@@ -202,10 +193,26 @@ function Get-TargetUserProfiles {
 # Main
 # ============================================================
 # Pester から `. ./install.ps1` で dot-source されたときは helper だけ
-# 露出させ main を実行しないようにする。
+# 露出させ main を実行しないようにする (Linux pwsh で C:\ パスを評価できないため)。
 # Intune 実行 (powershell.exe -File install.ps1) では InvocationName は
 # script のパスになるので main が走る。
 if ($MyInvocation.InvocationName -eq '.') { return }
+
+# Windows-only path constants. Top-level に置くと Linux pwsh の Join-Path が
+# "drive 'C' does not exist" で死ぬので guard の内側に置く。
+$NpmRegistry = "https://npm.flatt.tech/"
+$PipIndexUrl = "https://pypi.flatt.tech/simple/"
+
+$NpmMinReleaseAgeDays = 3        # npm v11+: 整数日数
+$PnpmMinReleaseAgeMin = 4320     # pnpm v10+: 分単位 (3d)
+$BunMinReleaseAgeSec  = 259200   # bun:       秒単位 (3d)
+
+$MarkerDir     = "C:\ProgramData\TakumiGuard"
+$MarkerFile    = Join-Path $MarkerDir ".installed"
+$NpmConfigDir  = "C:\ProgramData\npm-config"
+$NpmConfigFile = Join-Path $NpmConfigDir ".npmrc"
+$PipConfigDir  = "C:\ProgramData\pip"
+$PipConfigFile = Join-Path $PipConfigDir "pip.ini"
 
 try {
     foreach ($d in @($MarkerDir, $NpmConfigDir, $PipConfigDir)) {

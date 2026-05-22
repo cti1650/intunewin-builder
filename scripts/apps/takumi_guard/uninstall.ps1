@@ -1,12 +1,7 @@
 ﻿$ErrorActionPreference = "Stop"
 
-$MarkerDir     = "C:\ProgramData\TakumiGuard"
-$NpmConfigFile = "C:\ProgramData\npm-config\.npmrc"
-$PipConfigFile = "C:\ProgramData\pip\pip.ini"
-
 # ============================================================
-# Helper functions (install.ps1 と共通; .intunewin に同梱できる .ps1 は
-# install.ps1 / uninstall.ps1 のみのためインライン重複)
+# Helper-scope constants (Linux pwsh で dot-source 可能、Windows 専用 path は main 内へ)
 # ============================================================
 
 $MARKER_DISABLED = "# [TakumiGuard-disabled] "
@@ -14,6 +9,11 @@ $BLOCK_BEGIN     = "# === BEGIN TakumiGuard ==="
 $BLOCK_END       = "# === END TakumiGuard ==="
 # 旧 install.ps1 (PR #47 初版) が書き出していた「丸ごと管理」形式の識別子
 $LEGACY_HEADER   = "Managed by Takumi Guard (intunewin-builder). DO NOT EDIT MANUALLY."
+
+# ============================================================
+# Helper functions (install.ps1 と共通; .intunewin に同梱できる .ps1 は
+# install.ps1 / uninstall.ps1 のみのためインライン重複)
+# ============================================================
 
 function Write-FileNoBom {
     param([Parameter(Mandatory)][string]$Path, [string[]]$Lines)
@@ -100,6 +100,11 @@ function Restore-Config {
 # ============================================================
 # Pester から dot-source されたときは helper だけ露出させ main を実行しない。
 if ($MyInvocation.InvocationName -eq '.') { return }
+
+# Windows-only path constants (guard の内側へ)
+$MarkerDir     = "C:\ProgramData\TakumiGuard"
+$NpmConfigFile = "C:\ProgramData\npm-config\.npmrc"
+$PipConfigFile = "C:\ProgramData\pip\pip.ini"
 
 # system-wide
 Restore-Config -Path $NpmConfigFile
