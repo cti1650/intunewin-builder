@@ -53,6 +53,27 @@ function Write-FileNoBom {
     [System.IO.File]::WriteAllLines($Path, $Lines, $enc)
 }
 
+# 公式 takumi-guard-setup-0.4.0.ps1 と同じバックアップポリシー:
+# 既存 config を変更する直前に "<name>-backup-YYYYMMDD-HHMMSS" 形式で
+# 同一ディレクトリにコピーを残す。スクリプト成功後も削除しないので、
+# user が後から手動で「変更前の状態」に戻したい場合に利用できる。
+# ファイルが存在しない (新規作成パス) ときは何もしない。
+function Backup-File {
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    $ts = Get-Date -Format "yyyyMMdd-HHmmss"
+    $backup = "$Path-backup-$ts"
+    # 同一秒内の連打で衝突した場合、サフィックスを付けて衝突を避ける
+    if (Test-Path -LiteralPath $backup) {
+        $i = 1
+        while (Test-Path -LiteralPath "$backup-$i") { $i++ }
+        $backup = "$backup-$i"
+    }
+    Copy-Item -LiteralPath $Path -Destination $backup -Force
+    Write-Host "  Backed up: $backup"
+    return $backup
+}
+
 function Read-LinesOrEmpty {
     param([string]$Path)
     if (Test-Path -LiteralPath $Path) {
@@ -170,6 +191,8 @@ function Apply-ManagedConfig {
     if ($dir -and -not (Test-Path -LiteralPath $dir)) {
         New-Item -Path $dir -ItemType Directory -Force | Out-Null
     }
+    # 既存ファイルを変更する直前に backup を取る (新規作成時は何もしない)
+    Backup-File -Path $Path | Out-Null
     $lines = Read-LinesOrEmpty $Path
     $lines = Remove-ManagedBlock -Lines $lines
     $lines = Restore-DisabledLines -Lines $lines
@@ -194,6 +217,8 @@ function Apply-UvIndex {
     if ($dir -and -not (Test-Path -LiteralPath $dir)) {
         New-Item -Path $dir -ItemType Directory -Force | Out-Null
     }
+    # 既存ファイルを変更する直前に backup を取る (新規作成時は何もしない)
+    Backup-File -Path $Path | Out-Null
     $lines = Read-LinesOrEmpty $Path
     $lines = Remove-ManagedBlock -Lines $lines
     $lines = Restore-DisabledLines -Lines $lines

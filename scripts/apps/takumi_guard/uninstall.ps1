@@ -21,6 +21,24 @@ function Write-FileNoBom {
     [System.IO.File]::WriteAllLines($Path, $Lines, $enc)
 }
 
+# install.ps1 と同形式の timestamped backup。Restore-Config が既存ファイルを
+# 削除 / 書き換えする直前に呼ぶ。uninstall 後に手動で「uninstall 前の状態」へ
+# 戻したいケースに使える。
+function Backup-File {
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    $ts = Get-Date -Format "yyyyMMdd-HHmmss"
+    $backup = "$Path-backup-$ts"
+    if (Test-Path -LiteralPath $backup) {
+        $i = 1
+        while (Test-Path -LiteralPath "$backup-$i") { $i++ }
+        $backup = "$backup-$i"
+    }
+    Copy-Item -LiteralPath $Path -Destination $backup -Force
+    Write-Output "  Backed up: $backup"
+    return $backup
+}
+
 function Remove-ManagedBlock {
     param([string[]]$Lines)
     $out = New-Object System.Collections.Generic.List[string]
@@ -65,6 +83,9 @@ function Restore-Config {
         Write-Output "Skip (not managed): $Path"
         return
     }
+
+    # 復元前に backup を残しておく (uninstall 後にも「直前の状態」へ手で戻せる)
+    Backup-File -Path $Path | Out-Null
 
     if ($hasLegacy -and -not $hasBlock) {
         Remove-Item -LiteralPath $Path -Force

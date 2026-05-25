@@ -50,6 +50,93 @@ Describe "Read-LinesOrEmpty" {
     }
 }
 
+Describe "Backup-File" {
+    It "returns `$null when target does not exist (no backup needed for new file)" {
+        $tmp = New-TempDir
+        try {
+            $result = Backup-File -Path (Join-Path $tmp "nonexistent")
+            $result | Should -BeNullOrEmpty
+            # backup を作っていないこと
+            (Get-ChildItem -LiteralPath $tmp).Count | Should -Be 0
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+
+    It "creates <name>-backup-YYYYMMDD-HHMMSS next to the original" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp ".npmrc"
+            "registry=https://example.com/" | Set-Content -LiteralPath $path
+
+            $backup = Backup-File -Path $path
+            $backup | Should -Match '\.npmrc-backup-\d{8}-\d{6}$'
+            Test-Path -LiteralPath $backup | Should -BeTrue
+            (Get-Content $backup -Raw) | Should -Be (Get-Content $path -Raw)
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+
+    It "appends suffix on collision within same second" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "config"
+            "a" | Set-Content -LiteralPath $path
+            $b1 = Backup-File -Path $path
+            "b" | Set-Content -LiteralPath $path
+            $b2 = Backup-File -Path $path
+            $b1 | Should -Not -Be $b2
+            # 同一秒なら -1 サフィックス
+            if ($b1 -match '-backup-\d{8}-\d{6}$' -and $b1 -eq ($b2 -replace '-\d+$','')) {
+                $b2 | Should -Match '-\d+$'
+            }
+            Test-Path -LiteralPath $b1 | Should -BeTrue
+            Test-Path -LiteralPath $b2 | Should -BeTrue
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+}
+
+Describe "Apply-ManagedConfig backup integration" {
+    It "creates a backup before modifying existing file" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "pip.ini"
+            @("[global]", "index-url = https://corp/") | Set-Content -LiteralPath $path
+
+            Apply-ManagedConfig -Path $path -Section "global" `
+                -Settings ([ordered]@{ "index-url" = "https://pypi.flatt.tech/simple/" }) `
+                -Separator " = "
+
+            $backups = Get-ChildItem -LiteralPath $tmp -Filter "pip.ini-backup-*"
+            $backups.Count | Should -BeGreaterOrEqual 1
+            # backup の中身は変更前の状態と一致
+            (Get-Content $backups[0].FullName -Raw) | Should -Match 'index-url = https://corp/'
+            (Get-Content $backups[0].FullName -Raw) | Should -Not -Match 'pypi\.flatt\.tech'
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+
+    It "does NOT create backup when target file did not exist (new file path)" {
+        $tmp = New-TempDir
+        try {
+            $path = Join-Path $tmp "subdir/.npmrc"
+            Apply-ManagedConfig -Path $path -Section "" `
+                -Settings ([ordered]@{ "registry" = "https://npm.flatt.tech/" }) `
+                -Separator "="
+
+            # .npmrc-backup-* は存在しない
+            $backups = Get-ChildItem -LiteralPath (Split-Path -Parent $path) -Filter ".npmrc-backup-*" -ErrorAction SilentlyContinue
+            (@($backups).Count) | Should -Be 0
+        } finally {
+            Remove-Item -LiteralPath $tmp -Recurse -Force
+        }
+    }
+}
+
 Describe "Write-FileNoBom" {
     It "writes UTF-8 without BOM" {
         $tmp = New-TempDir
