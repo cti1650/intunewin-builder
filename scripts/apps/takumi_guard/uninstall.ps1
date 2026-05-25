@@ -1,12 +1,7 @@
 ﻿$ErrorActionPreference = "Stop"
 
-$MarkerDir     = "C:\ProgramData\TakumiGuard"
-$NpmConfigFile = "C:\ProgramData\npm-config\.npmrc"
-$PipConfigFile = "C:\ProgramData\pip\pip.ini"
-
 # ============================================================
-# Helper functions (install.ps1 と共通; .intunewin に同梱できる .ps1 は
-# install.ps1 / uninstall.ps1 のみのためインライン重複)
+# Helper-scope constants (Linux pwsh で dot-source 可能、Windows 専用 path は main 内へ)
 # ============================================================
 
 $MARKER_DISABLED = "# [TakumiGuard-disabled] "
@@ -15,10 +10,34 @@ $BLOCK_END       = "# === END TakumiGuard ==="
 # 旧 install.ps1 (PR #47 初版) が書き出していた「丸ごと管理」形式の識別子
 $LEGACY_HEADER   = "Managed by Takumi Guard (intunewin-builder). DO NOT EDIT MANUALLY."
 
+# ============================================================
+# Helper functions (install.ps1 と共通; .intunewin に同梱できる .ps1 は
+# install.ps1 / uninstall.ps1 のみのためインライン重複)
+# ============================================================
+
 function Write-FileNoBom {
     param([Parameter(Mandatory)][string]$Path, [string[]]$Lines)
     $enc = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllLines($Path, $Lines, $enc)
+}
+
+# install.ps1 と同形式の timestamped backup。Restore-Config が既存ファイルを
+# 削除 / 書き換えする直前に呼ぶ。uninstall 後に手動で「uninstall 前の状態」へ
+# 戻したいケースに使える。
+function Backup-File {
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    $ts = Get-Date -Format "yyyyMMdd-HHmmss"
+    $backup = "$Path-backup-$ts"
+    if (Test-Path -LiteralPath $backup) {
+        $i = 1
+        while (Test-Path -LiteralPath "$backup-$i") { $i++ }
+        $backup = "$backup-$i"
+    }
+    Copy-Item -LiteralPath $Path -Destination $backup -Force
+    # NOTE: Write-Output / Write-Host を入れると戻り値が array になるので diagnostic
+    # ログは呼び出し側で出す。
+    return $backup
 }
 
 function Remove-ManagedBlock {
@@ -66,6 +85,9 @@ function Restore-Config {
         return
     }
 
+    # 復元前に backup を残しておく (uninstall 後にも「直前の状態」へ手で戻せる)
+    Backup-File -Path $Path | Out-Null
+
     if ($hasLegacy -and -not $hasBlock) {
         Remove-Item -LiteralPath $Path -Force
         Write-Output "Removed (legacy fully-managed): $Path"
@@ -98,6 +120,13 @@ function Restore-Config {
 # ============================================================
 # Main
 # ============================================================
+# Pester から dot-source されたときは helper だけ露出させ main を実行しない。
+if ($MyInvocation.InvocationName -eq '.') { return }
+
+# Windows-only path constants (guard の内側へ)
+$MarkerDir     = "C:\ProgramData\TakumiGuard"
+$NpmConfigFile = "C:\ProgramData\npm-config\.npmrc"
+$PipConfigFile = "C:\ProgramData\pip\pip.ini"
 
 # system-wide
 Restore-Config -Path $NpmConfigFile
@@ -110,8 +139,13 @@ $ProfileRoots = @("C:\Users\Default") + (
         Select-Object -ExpandProperty FullName
 )
 foreach ($p in $ProfileRoots) {
+    Restore-Config -Path (Join-Path $p "AppData\Local\pnpm\config\rc")
     Restore-Config -Path (Join-Path $p "AppData\Local\pnpm\config\config.yaml")
     Restore-Config -Path (Join-Path $p ".bunfig.toml")
+    Restore-Config -Path (Join-Path $p "AppData\Roaming\pip\pip.ini")
+    Restore-Config -Path (Join-Path $p "AppData\Roaming\uv\uv.toml")
+    Restore-Config -Path (Join-Path $p "AppData\Roaming\pypoetry\config.toml")
+    Restore-Config -Path (Join-Path $p ".bundle\config")
 }
 
 # Machine 環境変数を解除

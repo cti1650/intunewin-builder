@@ -33,33 +33,47 @@
 #   - uninstall.ps1 でブロック削除 + disabled prefix 剥がしで元に戻せる
 # ============================================================
 
-$NpmRegistry = "https://npm.flatt.tech/"
-$PipIndexUrl = "https://pypi.flatt.tech/simple/"
-
-$NpmMinReleaseAgeDays = 3        # npm v11+: 整数日数
-$PnpmMinReleaseAgeMin = 4320     # pnpm v10+: 分単位 (3d)
-$BunMinReleaseAgeSec  = 259200   # bun:       秒単位 (3d)
-
-$MarkerDir     = "C:\ProgramData\TakumiGuard"
-$MarkerFile    = Join-Path $MarkerDir ".installed"
-$NpmConfigDir  = "C:\ProgramData\npm-config"
-$NpmConfigFile = Join-Path $NpmConfigDir ".npmrc"
-$PipConfigDir  = "C:\ProgramData\pip"
-$PipConfigFile = Join-Path $PipConfigDir "pip.ini"
-
 # ============================================================
-# Helper functions (uninstall.ps1 と共通; .intunewin に同梱できる .ps1 は
-# install.ps1 / uninstall.ps1 のみのためインライン重複)
+# Helper-scope constants (referenced from helper functions; safe to load
+# on Linux pwsh for Pester testing — no Windows-specific paths here)
 # ============================================================
 
 $MARKER_DISABLED = "# [TakumiGuard-disabled] "
 $BLOCK_BEGIN     = "# === BEGIN TakumiGuard ==="
 $BLOCK_END       = "# === END TakumiGuard ==="
 
+# ============================================================
+# Helper functions (uninstall.ps1 と共通; .intunewin に同梱できる .ps1 は
+# install.ps1 / uninstall.ps1 のみのためインライン重複)
+# ============================================================
+
 function Write-FileNoBom {
     param([Parameter(Mandatory)][string]$Path, [string[]]$Lines)
     $enc = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllLines($Path, $Lines, $enc)
+}
+
+# 公式 takumi-guard-setup-0.4.0.ps1 と同じバックアップポリシー:
+# 既存 config を変更する直前に "<name>-backup-YYYYMMDD-HHMMSS" 形式で
+# 同一ディレクトリにコピーを残す。スクリプト成功後も削除しないので、
+# user が後から手動で「変更前の状態」に戻したい場合に利用できる。
+# ファイルが存在しない (新規作成パス) ときは何もしない。
+function Backup-File {
+    param([Parameter(Mandatory)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return $null }
+    $ts = Get-Date -Format "yyyyMMdd-HHmmss"
+    $backup = "$Path-backup-$ts"
+    # 同一秒内の連打で衝突した場合、サフィックスを付けて衝突を避ける
+    if (Test-Path -LiteralPath $backup) {
+        $i = 1
+        while (Test-Path -LiteralPath "$backup-$i") { $i++ }
+        $backup = "$backup-$i"
+    }
+    Copy-Item -LiteralPath $Path -Destination $backup -Force
+    # NOTE: Write-Host を入れると Pester v5 の InformationStream キャプチャに
+    # 引っかかって戻り値が array になり Test-Path がコケる。診断ログは呼び
+    # 出し側 (main) で必要なら別途出す。
+    return $backup
 }
 
 function Read-LinesOrEmpty {
@@ -179,6 +193,8 @@ function Apply-ManagedConfig {
     if ($dir -and -not (Test-Path -LiteralPath $dir)) {
         New-Item -Path $dir -ItemType Directory -Force | Out-Null
     }
+    # 既存ファイルを変更する直前に backup を取る (新規作成時は何もしない)
+    Backup-File -Path $Path | Out-Null
     $lines = Read-LinesOrEmpty $Path
     $lines = Remove-ManagedBlock -Lines $lines
     $lines = Restore-DisabledLines -Lines $lines
@@ -187,6 +203,48 @@ function Apply-ManagedConfig {
     $lines = Add-ManagedBlock -Lines $lines -Section $Section `
         -Settings $Settings -Separator $Separator
     Write-FileNoBom -Path $Path -Lines $lines
+    Write-Host "  $Path"
+}
+
+# uv.toml 専用 (TOML array-of-tables [[index]] 構文。Apply-ManagedConfig の
+# 単一 [section] モデルでは扱えないため別 helper)。
+# 既存の `default = true` は disabled prefix でコメントアウトし、自分の
+# [[index]] エントリを default = true で末尾に追記する。
+function Apply-UvIndex {
+    param(
+        [Parameter(Mandatory)][string]$Path,
+        [Parameter(Mandatory)][string]$Url
+    )
+    $dir = Split-Path -Parent $Path
+    if ($dir -and -not (Test-Path -LiteralPath $dir)) {
+        New-Item -Path $dir -ItemType Directory -Force | Out-Null
+    }
+    # 既存ファイルを変更する直前に backup を取る (新規作成時は何もしない)
+    Backup-File -Path $Path | Out-Null
+    $lines = Read-LinesOrEmpty $Path
+    $lines = Remove-ManagedBlock -Lines $lines
+    $lines = Restore-DisabledLines -Lines $lines
+
+    # 既存の `default = true` をコメントアウト (`default = false` は触らない)
+    $out = New-Object System.Collections.Generic.List[string]
+    foreach ($line in $lines) {
+        if ($line -match '^\s*default\s*=\s*true\b') {
+            $out.Add($MARKER_DISABLED + $line)
+        } else {
+            $out.Add($line)
+        }
+    }
+    $appended = @($out.ToArray())
+
+    # 末尾に [[index]] ブロック (BEGIN/END で囲む)
+    if ($appended.Count -gt 0 -and $appended[-1].Trim() -ne "") { $appended += "" }
+    $appended += $BLOCK_BEGIN
+    $appended += "[[index]]"
+    $appended += "url = `"$Url`""
+    $appended += "default = true"
+    $appended += $BLOCK_END
+
+    Write-FileNoBom -Path $Path -Lines $appended
     Write-Host "  $Path"
 }
 
@@ -201,6 +259,27 @@ function Get-TargetUserProfiles {
 # ============================================================
 # Main
 # ============================================================
+# Pester から `. ./install.ps1` で dot-source されたときは helper だけ
+# 露出させ main を実行しないようにする (Linux pwsh で C:\ パスを評価できないため)。
+# Intune 実行 (powershell.exe -File install.ps1) では InvocationName は
+# script のパスになるので main が走る。
+if ($MyInvocation.InvocationName -eq '.') { return }
+
+# Windows-only path constants. Top-level に置くと Linux pwsh の Join-Path が
+# "drive 'C' does not exist" で死ぬので guard の内側に置く。
+$NpmRegistry = "https://npm.flatt.tech/"
+$PipIndexUrl = "https://pypi.flatt.tech/simple/"
+
+$NpmMinReleaseAgeDays = 3        # npm v11+: 整数日数
+$PnpmMinReleaseAgeMin = 4320     # pnpm v10+: 分単位 (3d)
+$BunMinReleaseAgeSec  = 259200   # bun:       秒単位 (3d)
+
+$MarkerDir     = "C:\ProgramData\TakumiGuard"
+$MarkerFile    = Join-Path $MarkerDir ".installed"
+$NpmConfigDir  = "C:\ProgramData\npm-config"
+$NpmConfigFile = Join-Path $NpmConfigDir ".npmrc"
+$PipConfigDir  = "C:\ProgramData\pip"
+$PipConfigFile = Join-Path $PipConfigDir "pip.ini"
 
 try {
     foreach ($d in @($MarkerDir, $NpmConfigDir, $PipConfigDir)) {
@@ -235,11 +314,21 @@ try {
     foreach ($p in Get-TargetUserProfiles) {
         if (-not (Test-Path -LiteralPath $p)) { continue }
         try {
+            # pnpm は registry/auth を INI (.npmrc 互換) から、それ以外を YAML
+            # (pnpm-workspace.yaml or config.yaml) から読む二分体制。公式
+            # takumi-guard-setup-0.4.0.ps1 と同じく registry は rc (INI) に書く。
+            Apply-ManagedConfig `
+                -Path (Join-Path $p "AppData\Local\pnpm\config\rc") `
+                -Section "" `
+                -Settings ([ordered]@{
+                    "registry" = $NpmRegistry
+                }) -Separator "="
+
+            # minimumReleaseAge は config.yaml (YAML) の方に置く
             Apply-ManagedConfig `
                 -Path (Join-Path $p "AppData\Local\pnpm\config\config.yaml") `
                 -Section "" `
                 -Settings ([ordered]@{
-                    "registry"            = $NpmRegistry
                     "minimum-release-age" = $PnpmMinReleaseAgeMin
                 }) -Separator ": "
 
@@ -247,9 +336,49 @@ try {
                 -Path (Join-Path $p ".bunfig.toml") `
                 -Section "install" `
                 -Settings ([ordered]@{
-                    "registry"          = "`"$NpmRegistry`""    # TOML string は要 quote
+                    # 公式 takumi-guard-setup-0.4.0.ps1 と同じ object 形式。
+                    # token なしの anonymous でも { url = "..." } で書く方が
+                    # 将来 token 追加するときに upgrade パスが素直になる。
+                    "registry"          = "{ url = `"$NpmRegistry`" }"
                     "minimumReleaseAge" = $BunMinReleaseAgeSec
                 }) -Separator " = "
+
+            # pip per-user: pip の優先順位は site > user > global なので
+            # system-wide pip.ini だけだと user に何か書かれていると負ける。
+            # 各ユーザーの %APPDATA%\pip\pip.ini にも管理ブロックを置く。
+            Apply-ManagedConfig `
+                -Path (Join-Path $p "AppData\Roaming\pip\pip.ini") `
+                -Section "global" `
+                -Settings ([ordered]@{
+                    "index-url" = $PipIndexUrl
+                }) -Separator " = "
+
+            # uv per-user: env だけだと CLI flag / project の pyproject.toml の
+            # [tool.uv.sources] で容易に override される。file 配置で強度を上げる。
+            Apply-UvIndex `
+                -Path (Join-Path $p "AppData\Roaming\uv\uv.toml") `
+                -Url $PipIndexUrl
+
+            # poetry per-user: PIP_INDEX_URL は poetry が見ない。専用設定が必須。
+            # priority = "primary" で takumi をデフォルト source にする (poetry 1.5+)。
+            Apply-ManagedConfig `
+                -Path (Join-Path $p "AppData\Roaming\pypoetry\config.toml") `
+                -Section "repositories.takumi-guard" `
+                -Settings ([ordered]@{
+                    "url"      = "`"$PipIndexUrl`""    # TOML string は要 quote
+                    "priority" = '"primary"'
+                }) -Separator " = "
+
+            # Bundler (Ruby) per-user: ~/.bundle/config に
+            # BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/: "https://rubygems.flatt.tech/"
+            # を書く。Bundler の mirror 機能で rubygems.org への通信を Takumi 経由に。
+            # Bundler 1.13+ で対応。anonymous 利用なので token credential は書かない。
+            Apply-ManagedConfig `
+                -Path (Join-Path $p ".bundle\config") `
+                -Section "" `
+                -Settings ([ordered]@{
+                    "BUNDLE_MIRROR__HTTPS://RUBYGEMS__ORG/" = '"https://rubygems.flatt.tech/"'
+                }) -Separator ": "
         } catch {
             Write-Warning "  Skipped $p : $_"
         }
