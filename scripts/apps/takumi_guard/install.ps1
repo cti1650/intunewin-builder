@@ -70,7 +70,9 @@ function Backup-File {
         $backup = "$backup-$i"
     }
     Copy-Item -LiteralPath $Path -Destination $backup -Force
-    Write-Host "  Backed up: $backup"
+    # NOTE: Write-Host を入れると Pester v5 の InformationStream キャプチャに
+    # 引っかかって戻り値が array になり Test-Path がコケる。診断ログは呼び
+    # 出し側 (main) で必要なら別途出す。
     return $backup
 }
 

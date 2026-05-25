@@ -35,7 +35,8 @@ function Backup-File {
         $backup = "$backup-$i"
     }
     Copy-Item -LiteralPath $Path -Destination $backup -Force
-    Write-Output "  Backed up: $backup"
+    # NOTE: Write-Output / Write-Host を入れると戻り値が array になるので diagnostic
+    # ログは呼び出し側で出す。
     return $backup
 }
 
