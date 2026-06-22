@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Parse all .ps1
         shell: pwsh
         run: pwsh -File scripts/check-syntax.ps1
@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Schema check
         shell: pwsh
         run: pwsh -File scripts/check-apps-schema.ps1
@@ -48,7 +48,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Choice list consistency
         shell: pwsh
         run: pwsh -File scripts/check-choice-list.ps1
@@ -58,7 +58,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Download actionlint
         id: actionlint
         run: bash <(curl --silent --show-error --fail https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
@@ -85,7 +85,7 @@ jobs:
       normal_apps: ${{ steps.detect.outputs.normal_apps }}
       script_based_apps: ${{ steps.detect.outputs.script_based_apps }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # PR では base ref と head ref の両方を持っておく必要があるため全 history。
           # master push は HEAD~1 が読めれば十分だが diff の式を共通化するため 0 にする。
